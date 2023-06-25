@@ -19,26 +19,32 @@
 
 send_group_msg 发送群消息(目前只支持文字和图片)
 
-### 可以实现
-
 get_login_info 获取登录号信息
 
-get_stranger_info 获取陌生人信息
+get_stranger_info 获取陌生人信息(年龄为0，性别为unknown)
 
-get_group_info 获取群信息
+get_group_info 获取群信息(成员数和最大成员数为0)
 
-get_group_list 获取群列表
+get_group_list 获取群列表(成员数和最大成员数为0)
 
-get_group_member_info 获取群成员信息
+get_group_member_info 获取群成员信息(成员信息尽力提供)
+
+send_msg 发送消息(仅支持发送群聊消息)
+
+can_send_image 检查是否可以发送图片
+
+get_status 获取运行状态
+
+get_version_info 获取版本信息
+
+### 可以实现
 
 set_group_kick 群组踢人
 
 
-
 ### 正在研究
-send_private_msg 发送私聊消息
 
-send_msg 发送消息
+send_private_msg 发送私聊消息
 
 delete_msg 撤回消息
 
@@ -74,19 +80,14 @@ get_record 获取语音
 
 get_image 获取图片
 
-can_send_image 检查是否可以发送图片
-
 can_send_record 检查是否可以发送语音
 
-get_status 获取运行状态
-
-get_version_info 获取版本信息
 
 ### 不实现
 
 send_like 发送好友赞
 
-get_group_member_list 获取群成员列表
+get_group_member_list 获取群成员列表(kook支持几十万人，没法实现这个)
 
 get_group_honor_info 获取群荣誉信息
 

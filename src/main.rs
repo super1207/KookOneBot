@@ -13,7 +13,7 @@ lazy_static! {
 }
 
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::{Arc, atomic::AtomicI64}};
 use futures_util::{SinkExt, StreamExt};
 use hyper_tungstenite::hyper;
 use kook_onebot::KookOnebot;
@@ -26,6 +26,7 @@ async fn serve_websocket(uid:&str,websocket: hyper_tungstenite::HyperWebsocket) 
     let kb = crate::kook_onebot::KookOnebot {
         token: G_KOOK_TOKEN.read().await.to_owned(),
         self_id: G_SELF_ID.read().await.to_owned(),
+        sn: Arc::new(AtomicI64::new(0)),
     };
 
     // 获得升级后的ws流
@@ -43,6 +44,7 @@ async fn serve_websocket(uid:&str,websocket: hyper_tungstenite::HyperWebsocket) 
     let ws_stream = websocket.await?;
     let (mut write_half, mut read_half ) = futures_util::StreamExt::split(ws_stream);
 
+    // 向onebot客户端发送生命周期包
     let life_event = kb.get_lifecycle_event().await?;
     write_half.send(hyper_tungstenite::tungstenite::Message::Text(life_event)).await?;
 
@@ -92,7 +94,8 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut kb = KookOnebot {
         token:"1/123456=/123456789123456==".to_owned(),
-        self_id:0
+        self_id:0,
+        sn: Arc::new(AtomicI64::new(0)),
     };
     let login_info = kb.get_login_info().await?;
     println!("欢迎 `{}`({})！",login_info.nickname,login_info.user_id);

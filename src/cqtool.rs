@@ -233,3 +233,14 @@ let cqstr =  js.as_str().ok_or("can not get str msg")?.chars().collect::<Vec<cha
     }
     Ok(serde_json::Value::Array(jsonarr))
 }
+
+pub fn make_kook_text(text:&str) -> String {
+    let mut s = String::new();
+    for it in text.chars() {
+        if it == '\\' || it == '*' || it == '~' || it == '[' || it == '(' || it == ')' || it == ']' || it == '-' || it == '>' || it == '`'{
+            s.push('\\');
+        }
+        s.push(it);
+    }
+    s
+}

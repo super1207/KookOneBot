@@ -1,19 +1,20 @@
 
 
-use std::{str::FromStr, io::Read, collections::HashMap};
+use std::{str::FromStr, io::Read, collections::HashMap, time::Duration, sync::{atomic::AtomicI64, Arc}};
 
 use flate2::read::ZlibDecoder;
-use futures_util::StreamExt;
+use futures_util::{StreamExt, SinkExt};
 use hyper::http::{HeaderName, HeaderValue};
 use serde_derive::{Serialize, Deserialize};
 use tokio_tungstenite::connect_async;
 use std::time::SystemTime;
 
-use crate::{G_ONEBOT_RX, cqtool::{str_msg_to_arr, arr_to_cq_str, cq_params_encode}};
+use crate::{G_ONEBOT_RX, cqtool::{str_msg_to_arr, arr_to_cq_str, cq_params_encode, make_kook_text}};
 
 pub(crate) struct KookOnebot {
     pub token:String,
-    pub self_id:i64
+    pub self_id:i64,
+    pub sn:Arc<AtomicI64>
 }
 
 impl KookOnebot {
@@ -213,7 +214,21 @@ impl KookOnebot {
         let wss_url = self.get_gateway().await?;
         println!("connect to:{wss_url}");
         let (ws_stream, _) = connect_async(wss_url).await?;
-        let (_,mut read_halt) = ws_stream.split();
+        let (mut write_halt,mut read_halt) = ws_stream.split();
+        let sn_ptr = self.sn.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                let json_str = serde_json::json!({
+                    "s": 2,
+                    "sn": sn_ptr.load(std::sync::atomic::Ordering::Relaxed)
+                }).to_string();
+                let foo = write_halt.send(tungstenite::Message::Text(json_str)).await;
+                if foo.is_err() {
+                    break;
+                }
+            }
+        });
         while let Some(msg) = read_halt.next().await {
             let raw_msg = msg?;
             if raw_msg.is_binary() {
@@ -235,10 +250,14 @@ impl KookOnebot {
                 else if s == 0 {
                     println!("recv event:{}",js.to_string());
                     let d = js.get("d").ok_or("d not found")?;
+                    let sn = js.get("sn").ok_or("sn not found")?.as_i64().ok_or("sn not i64")?;
+                    self.sn.store(sn, std::sync::atomic::Ordering::Relaxed);
                     let rst = self.deal_kook_event(d.clone()).await;
                     if rst.is_err() {
                         println!("{rst:?}");
                     }
+                }else if s == 3 {
+                    println!("recv ping:{}",js.to_string());
                 }
             }
         }
@@ -250,110 +269,256 @@ impl KookOnebot {
         let ret = format!("{{\"meta_event_type\":\"lifecycle\",\"post_type\":\"meta_event\",\"self_id\":{self_id},\"sub_type\":\"connect\",\"time\":{tm}}}");
         Ok(ret)
     }
-    async fn deal_kook_event(&self,data:serde_json::Value)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let tp = data.get("channel_type").ok_or("channel_type not found")?.as_str().ok_or("channel_type not str")?;
-        if tp == "GROUP" {
-            let user_id_str = data.get("author_id").ok_or("author_id not found")?.as_str().ok_or("author_id not str")?;
-            let user_id = user_id_str.parse::<i64>()?;
-            let group_id_str = data.get("target_id").ok_or("target_id not found")?.as_str().ok_or("target_id not str")?;
-            let group_id = group_id_str.parse::<i64>()?;
-            let mut message = data.get("content").ok_or("content not found")?.as_str().ok_or("content not str")?.to_owned();
-            let sender = self.get_group_member_info(group_id_str,user_id_str).await?;
-            // let message_id_str = data.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
-            let msg_type = data.get("type").ok_or("type not found")?.as_i64().ok_or("type not i64")?;
-            if msg_type == 2 {
-                message = format!("[CQ:image,file={}]",cq_params_encode(&message));
-            }
-            let  event_json = serde_json::json!({
-                "time":SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs().to_string(),
-                "self_id":crate::G_SELF_ID.read().await.to_owned(),
-                "post_type":"message",
-                "message_type":"group",
-                "sub_type":"normal",
-                "message_id":0,
-                "group_id":group_id,
-                "user_id":user_id,
-                "message":message,
-                "raw_message":message,
-                "font":0,
-                "sender":sender
-            });
-            let lk = G_ONEBOT_RX.read().await;
-            for (_,v) in &*lk {
-                v.send(event_json.to_string()).await?;
-            }
+    async fn deal_group_event(&self,data:&serde_json::Value) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let user_id_str = data.get("author_id").ok_or("author_id not found")?.as_str().ok_or("author_id not str")?;
+        let user_id = user_id_str.parse::<i64>()?;
+        if user_id == 1 { // 不处理系统消息
+            return Ok(());
+        }
+        let group_id_str = data.get("target_id").ok_or("target_id not found")?.as_str().ok_or("target_id not str")?;
+        let group_id = group_id_str.parse::<i64>()?;
+        let mut message = data.get("content").ok_or("content not found")?.as_str().ok_or("content not str")?.to_owned();
+        let sender = self.get_group_member_info(group_id_str,user_id_str).await?;
+        // let message_id_str = data.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
+        let msg_type = data.get("type").ok_or("type not found")?.as_i64().ok_or("type not i64")?;
+        if msg_type == 2 { // 图片消息
+            message = format!("[CQ:image,file={}]",cq_params_encode(&message));
+        }
+        let  event_json = serde_json::json!({
+            "time":SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs().to_string(),
+            "self_id":crate::G_SELF_ID.read().await.to_owned(),
+            "post_type":"message",
+            "message_type":"group",
+            "sub_type":"normal",
+            "message_id":0,
+            "group_id":group_id,
+            "user_id":user_id,
+            "message":message,
+            "raw_message":message,
+            "font":0,
+            "sender":sender
+        });
+        let lk = G_ONEBOT_RX.read().await;
+        for (_,v) in &*lk {
+            v.send(event_json.to_string()).await?;
         }
         Ok(())
     }
-    // 这个函数处理onebot的api调用
-    pub async fn deal_onebot(&self,uid:&str,text:&str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        fn get_json_str(js:&serde_json::Value,key:&str) -> String {
-            let key_val = js.get(key);
-            if key_val.is_none() {
-                return "".to_owned();
-            }
-            let val = key_val.unwrap();
-            if val.is_i64() {
-                return val.as_i64().unwrap().to_string();
-            }
-            if val.is_string() {
-                return val.as_str().unwrap().to_string();
-            }
-            return "".to_owned();
+    async fn deal_kook_event(&self,data:serde_json::Value)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let tp = data.get("channel_type").ok_or("channel_type not found")?.as_str().ok_or("channel_type not str")?;
+        if tp == "GROUP" {
+            self.deal_group_event(&data).await?;
         }
+        Ok(())
+    }
+
+    async fn deal_ob_send_group_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let group_id = get_json_str(params,"group_id");
+        let message_arr:serde_json::Value;
+        let message_rst = params.get("message").ok_or("message not found")?;
+        
+        if message_rst.is_string() {
+            message_arr = str_msg_to_arr(message_rst)?;
+        }else {
+            message_arr = params.get("message").ok_or("message not found")?.to_owned();
+        }
+        
+        let mut to_send_data = vec![];
+        for it in message_arr.as_array().ok_or("message not arr")? {
+            let tp = it.get("type").ok_or("type not found")?;
+            if tp == "text"{
+                let t = it.get("data").ok_or("data not found")?.get("text").ok_or("text not found")?.as_str().ok_or("text not str")?.to_owned();
+                let s = make_kook_text(&t);
+                to_send_data.push((1,s))
+            }else if tp == "image"{
+                let file = it.get("data").ok_or("data not found")?.get("file").ok_or("file not found")?.as_str().ok_or("file not str")?;
+                let file_url = self.upload_image(file).await?;
+                to_send_data.push((2,file_url));
+            }
+            else {
+                let j = serde_json::json!([it]);
+                let s = arr_to_cq_str(&j)?;
+                let s2 = make_kook_text(&s);
+                to_send_data.push((1,s2)) 
+            }
+        }
+        for (tp,msg) in & to_send_data.clone() {
+            self.send_group_msg(*tp,&group_id,msg).await?;
+        }
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": {
+                "message_id":0
+            },
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
+    async fn deal_ob_get_login_info(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let info: LoginInfo = self.get_login_info().await?;
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": info,
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
+    async fn deal_ob_get_stranger_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let user_id = get_json_str(params,"user_id");
+        let info = self.get_stranger_info(&user_id).await?;
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": info,
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
+    async fn deal_ob_get_group_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let group_id = get_json_str(params,"group_id");
+        let info = self.get_group_info(&group_id).await?;
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": info,
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
+    async fn deal_ob_get_group_list(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let info = self.get_group_list().await?;
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": info,
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
+    
+    async fn deal_ob_get_group_member_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let group_id = get_json_str(params,"group_id");
+        let user_id = get_json_str(params,"user_id");
+        let info = self.get_group_member_info(&group_id, &user_id).await?;
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": info,
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
+    // 这个函数处理onebot的api调用
+    pub async fn deal_onebot(&self,_uid:&str,text:&str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let js:serde_json::Value = serde_json::from_str(&text)?;
         let action = js.get("action").ok_or("action not found")?.as_str().ok_or("action not str")?;
         let def = serde_json::json!({});
         let params = js.get("params").unwrap_or(&def);
-        if action == "send_group_msg" {
-            let group_id = get_json_str(params,"group_id");
-            let message_arr:serde_json::Value;
-            let message_rst = params.get("message").ok_or("message not found")?;
-            
-            if message_rst.is_string() {
-                message_arr = str_msg_to_arr(message_rst)?;
-            }else {
-                message_arr = params.get("message").ok_or("message not found")?.to_owned();
-            }
-           
-            let mut to_send_data = vec![];
-            for it in message_arr.as_array().ok_or("message not arr")? {
-                let tp = it.get("type").ok_or("type not found")?;
-                if tp == "text"{
-                    let t = it.get("data").ok_or("data not found")?.get("text").ok_or("text not found")?.as_str().ok_or("text not str")?;
-                    to_send_data.push((1,t.to_owned()))
-                }else if tp == "image"{
-                    let file = it.get("data").ok_or("data not found")?.get("file").ok_or("file not found")?.as_str().ok_or("file not str")?;
-                    let file_url = self.upload_image(file).await?;
-                    to_send_data.push((2,file_url));
+        let echo = get_json_str(&js,"echo");
+        let send_json;
+        println!("action:{action}");
+        send_json = match action {
+            "send_group_msg" => {
+                self.deal_ob_send_group_msg(&params,&js,&echo).await?
+            },
+            "get_login_info" => {
+                self.deal_ob_get_login_info(&params,&js,&echo).await?
+            },
+            "get_stranger_info" => {
+                self.deal_ob_get_stranger_info(&params,&js,&echo).await?
+            },
+            "get_group_info" => {
+                self.deal_ob_get_group_info(&params,&js,&echo).await?
+            },
+            "get_group_list" => {
+                self.deal_ob_get_group_list(&params,&js,&echo).await?
+            },
+            "get_group_member_info" => {
+                self.deal_ob_get_group_member_info(&params,&js,&echo).await?
+            },
+            "send_msg" => {
+                let message_type = get_json_str(params,"message_type");
+                let user_id = get_json_str(params,"user_id");
+                let to_send;
+                if message_type == "group" || user_id == "" {
+                    to_send = self.deal_ob_send_group_msg(&params,&js,&echo).await?
+                }else {
+                    to_send = serde_json::json!({
+                        "status":"failed",
+                        "retcode":-1,
+                        "data": {},
+                        "echo":echo
+                    });
                 }
-                else {
-                    let j = serde_json::json!(it);
-                    let s = arr_to_cq_str(&j)?;
-                    to_send_data.push((1,s)) 
-                }
+                to_send
             }
-            let echo = get_json_str(&js,"echo");
-            for (tp,msg) in & to_send_data.clone() {
-                self.send_group_msg(*tp,&group_id,msg).await?;
+            "can_send_image" => {
+                serde_json::json!({
+                    "status":"ok",
+                    "retcode":0,
+                    "data": {"yes":true},
+                    "echo":echo
+                })
+            },
+            "get_status" => {
+                serde_json::json!({
+                    "status":"ok",
+                    "retcode":0,
+                    "data": {
+                        "online":true,
+                        "good":true
+                    },
+                    "echo":echo
+                })
+            },
+            "get_version_info" => {
+                serde_json::json!({
+                    "status":"ok",
+                    "retcode":0,
+                    "data": {
+                        "app_name":"kook-onebot",
+                        "app_version":"0.0.1",
+                        "protocol_version":"v11"
+                    },
+                    "echo":echo
+                })
+            },
+            _ => {
+                serde_json::json!({
+                    "status":"failed",
+                    "retcode":-1,
+                    "data": {},
+                    "echo":echo
+                })
             }
-            let send_json = serde_json::json!({
-                "status":"ok",
-                "retcode":0,
-                "data": {
-                    "message_id":0
-                },
-                "echo":echo
-            });
-            let lk = G_ONEBOT_RX.read().await;
-            if let Some(tx) = lk.get(uid) {
-                tx.send(send_json.to_string()).await?;
-            }
-        }
-        Ok("".to_owned())
+        };
+        Ok(send_json.to_string())
     }
 }
 
+
+fn get_json_str(js:&serde_json::Value,key:&str) -> String {
+    let key_val = js.get(key);
+    if key_val.is_none() {
+        return "".to_owned();
+    }
+    let val = key_val.unwrap();
+    if val.is_i64() {
+        return val.as_i64().unwrap().to_string();
+    }
+    if val.is_string() {
+        return val.as_str().unwrap().to_string();
+    }
+    return "".to_owned();
+}
 
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug)]

@@ -2,6 +2,8 @@
 
 pub mod kook_onebot;
 pub mod cqtool;
+mod msgid_tool;
+mod config_tool;
 
 #[macro_use]
 extern crate lazy_static; 
@@ -10,6 +12,7 @@ lazy_static! {
     pub static ref G_SELF_ID:RwLock<i64> = RwLock::new(0);
     pub static ref G_KOOK_TOKEN:RwLock<String> = RwLock::new(String::new());
     pub static ref G_ONEBOT_RX:RwLock<HashMap<String,tokio::sync::mpsc::Sender<String>>> = RwLock::new(HashMap::new());
+    pub static ref G_ACCESS_TOKEN:RwLock<String> = RwLock::new(String::new());
 }
 
 
@@ -19,6 +22,8 @@ use hyper_tungstenite::hyper;
 use kook_onebot::KookOnebot;
 use tokio::sync::RwLock;
 use hyper::service::make_service_fn;
+
+use crate::config_tool::read_config;
 
 /// 处理ws协议
 async fn serve_websocket(uid:&str,websocket: hyper_tungstenite::HyperWebsocket) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -75,6 +80,26 @@ async fn serve_websocket(uid:&str,websocket: hyper_tungstenite::HyperWebsocket) 
 }
 
 async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::Response<hyper::Body>, Box<dyn std::error::Error + Send + Sync>> {
+    
+    let g_access_token = G_ACCESS_TOKEN.read().await.clone();
+    if !g_access_token.is_empty() {
+        let headers_map = request.headers();
+        let access_token:String;
+        if let Some(token) = headers_map.get("Authorization") {
+            access_token = token.to_str()?.to_owned();
+        }
+        else {
+            access_token = "".to_owned();
+        }
+        if access_token != "Bear ".to_owned() + &g_access_token {
+            println!("ws鉴权失败!");
+            let mut res = hyper::Response::new(hyper::Body::from(vec![]));
+            *res.status_mut() = hyper::StatusCode::NOT_FOUND;
+            return Ok(res);
+        }
+    }
+
+    
     if hyper_tungstenite::is_upgrade_request(&request) {
         let uid = uuid::Uuid::new_v4().to_string();
         println!("接收到ws连接`{uid}`");
@@ -92,12 +117,29 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    let config_file = read_config().await.unwrap();
+
+    let kook_token = config_file.get("kook_token").unwrap().as_str().unwrap();
+    let mut web_host = config_file.get("web_host").unwrap().as_str().unwrap();
+    let web_port = config_file.get("web_port").unwrap().as_u64().unwrap();
+    let access_token = config_file.get("access_token").unwrap().as_str().unwrap();
+
+    if web_host == "localhost" {
+        web_host = "127.0.0.1";
+    }
+
+    *G_ACCESS_TOKEN.write().await = access_token.to_owned();
+
     let mut kb = KookOnebot {
-        token:"1/123456=/123456789123456==".to_owned(),
+        token:kook_token.to_owned(),
         self_id:0,
         sn: Arc::new(AtomicI64::new(0)),
     };
+    println!("正在登录中...");
     let login_info = kb.get_login_info().await?;
+
+
     println!("欢迎 `{}`({})！",login_info.nickname,login_info.user_id);
     let self_id = login_info.user_id;
     kb.self_id = self_id;
@@ -114,9 +156,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
     });
-    let host = "127.0.0.1";
-    let port = 8080;
-    let web_uri = format!("{host}:{port}");
+    
+
+    let web_uri = format!("{web_host}:{web_port}");
     let addr = web_uri.parse::<std::net::SocketAddr>()?;
     let bd_rst = hyper::Server::try_bind(&addr);
     if bd_rst.is_ok() {

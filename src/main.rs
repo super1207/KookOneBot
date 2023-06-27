@@ -9,7 +9,7 @@ mod config_tool;
 extern crate lazy_static; 
 
 lazy_static! {
-    pub static ref G_SELF_ID:RwLock<i64> = RwLock::new(0);
+    pub static ref G_SELF_ID:RwLock<u64> = RwLock::new(0);
     pub static ref G_KOOK_TOKEN:RwLock<String> = RwLock::new(String::new());
     pub static ref G_ONEBOT_RX:RwLock<HashMap<String,tokio::sync::mpsc::Sender<String>>> = RwLock::new(HashMap::new());
     pub static ref G_ACCESS_TOKEN:RwLock<String> = RwLock::new(String::new());
@@ -79,27 +79,80 @@ async fn serve_websocket(uid:&str,websocket: hyper_tungstenite::HyperWebsocket) 
     Ok(())
 }
 
-async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::Response<hyper::Body>, Box<dyn std::error::Error + Send + Sync>> {
-    
-    let g_access_token = G_ACCESS_TOKEN.read().await.clone();
-    if !g_access_token.is_empty() {
-        let headers_map = request.headers();
-        let access_token:String;
-        if let Some(token) = headers_map.get("Authorization") {
-            access_token = token.to_str()?.to_owned();
+fn get_params_from_uri(uri:&hyper::Uri) -> HashMap<String,String> {
+    let mut ret_map = HashMap::new();
+    if uri.query().is_none() {
+        return ret_map;
+    }
+    let query_str = uri.query().unwrap();
+    let query_vec = query_str.split("&");
+    for it in query_vec {
+        if it == "" {
+            continue;
+        }
+        let index_opt = it.find("=");
+        if index_opt.is_some() {
+            let k_rst = urlencoding::decode(it.get(0..index_opt.unwrap()).unwrap());
+            let v_rst = urlencoding::decode(it.get(index_opt.unwrap() + 1..).unwrap());
+            if k_rst.is_err() || v_rst.is_err() {
+                continue;
+            }
+            ret_map.insert(k_rst.unwrap().to_string(), v_rst.unwrap().to_string());
         }
         else {
-            access_token = "".to_owned();
-        }
-        if access_token != "Bear ".to_owned() + &g_access_token {
-            println!("ws鉴权失败!");
-            let mut res = hyper::Response::new(hyper::Body::from(vec![]));
-            *res.status_mut() = hyper::StatusCode::NOT_FOUND;
-            return Ok(res);
+            let k_rst = urlencoding::decode(it);
+            if k_rst.is_err() {
+                continue;
+            }
+            ret_map.insert(k_rst.unwrap().to_string(),"".to_owned());
         }
     }
+    ret_map
+}
 
+async fn connect_handle(mut request: hyper::Request<hyper::Body>) -> Result<hyper::Response<hyper::Body>, Box<dyn std::error::Error + Send + Sync>> {
     
+    // 获得当前的访问密钥
+    let mut is_pass = false;
+    let g_access_token = G_ACCESS_TOKEN.read().await.clone();
+    let headers_map = request.headers();
+    if !g_access_token.is_empty() {
+        {
+            let access_token:String;
+            if let Some(token) = headers_map.get("Authorization") {
+                access_token = token.to_str()?.to_owned();
+            }
+            else {
+                access_token = "".to_owned();
+            }
+            if access_token == "Bear ".to_owned() + &g_access_token {
+                is_pass = true;
+            }
+        }
+        {
+            let uri = request.uri().clone();
+            let mp = get_params_from_uri(&uri);
+            if let Some(val) = mp.get("access_token") {
+                if &g_access_token == val {
+                    is_pass = true;
+                }
+            }
+            
+        }
+
+    } else {
+        is_pass = true;
+    }
+
+    if is_pass == false {
+        println!("ws鉴权失败!");
+        let mut res = hyper::Response::new(hyper::Body::from(vec![]));
+        *res.status_mut() = hyper::StatusCode::NOT_FOUND;
+        return Ok(res);
+    }
+
+    let url_path = request.uri().path().to_owned();
+
     if hyper_tungstenite::is_upgrade_request(&request) {
         let uid = uuid::Uuid::new_v4().to_string();
         println!("接收到ws连接`{uid}`");
@@ -109,14 +162,54 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
             println!("ws断开连接:`{uid}`,`{ret:?}`");
         });
         return Ok(response);
+    } else {
+        
+        let action = url_path.get(1..).ok_or("get action from url_path err")?;
+        let kb = crate::kook_onebot::KookOnebot {
+            token: G_KOOK_TOKEN.read().await.to_owned(),
+            self_id: G_SELF_ID.read().await.to_owned(),
+            sn: Arc::new(AtomicI64::new(0)),
+        };
+        let method = request.method().to_string();
+        let params;
+        if method == "GET" {
+            let mp = get_params_from_uri(request.uri());
+            params = serde_json::json!(mp);
+        }else if method == "POST" {
+            if let Some(content_type) = headers_map.get("content-type") {
+                if content_type.to_str()? == "application/json" {
+                    let body = hyper::body::to_bytes(request.body_mut()).await?;
+                    params  = serde_json::from_slice(&body)?;
+                } else {
+                    let body = hyper::body::to_bytes(request.body_mut()).await?;
+                    params = url::form_urlencoded::parse(&body).collect::<serde_json::Value>();
+                }
+            } else {
+                let body = hyper::body::to_bytes(request.body_mut()).await?;
+                params = url::form_urlencoded::parse(&body).collect::<serde_json::Value>();
+            }
+        } else {
+            let res = hyper::Response::new(hyper::Body::from(vec![]));
+            return Ok(res);
+        }
+        let js = serde_json::json!({
+            "action":action,
+            "params": params
+        });
+        let ret = kb.deal_onebot("", &js.to_string()).await?;
+        let mut res = hyper::Response::new(hyper::Body::from(ret));
+        res.headers_mut().insert("Content-Type", hyper::http::HeaderValue::from_static("application/json"));
+        return Ok(res);
     }
-    let mut res = hyper::Response::new(hyper::Body::from(vec![]));
-    *res.status_mut() = hyper::StatusCode::NOT_FOUND;
-    Ok(res)
+    // let mut res = hyper::Response::new(hyper::Body::from(vec![]));
+    // *res.status_mut() = hyper::StatusCode::NOT_FOUND;
+    // Ok(res)
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    println!("欢迎使用KookOnebot by super1207!!! v0.0.1");
 
     let config_file = read_config().await.unwrap();
 

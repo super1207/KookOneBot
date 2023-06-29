@@ -270,6 +270,38 @@ impl KookOnebot {
         Ok(())
     }
 
+    pub async fn get_friend_list(&self)-> Result<Vec<FriendInfo>, Box<dyn std::error::Error + Send + Sync>> {
+
+        let mut ret_vec = vec![];
+        let friend_list = self.http_get_json(&format!("/user-chat/list")).await?;
+        for it in friend_list.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
+            let target_info = it.get("target_info").ok_or("target_info not found")?;
+            let id = target_info.get("id").ok_or("id not found")?.as_str().ok_or("id not str")?;
+            let username = target_info.get("username").ok_or("username not found")?.as_str().ok_or("username not str")?;
+            ret_vec.push(FriendInfo {
+                user_id: id.parse::<u64>()?,
+                nickname: username.to_owned(),
+                remark: username.to_owned()
+            });
+        }
+        let meta = friend_list.get("meta").ok_or("meta not found")?;
+        let page_total = meta.get("page_total").ok_or("page_total not found")?.as_i64().ok_or("page_total not i32")?;
+        for page in 1..page_total{
+            let friend_list = self.http_get_json(&format!("/user-chat/list?page={page}")).await?;
+            for it in friend_list.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
+                let target_info = it.get("target_info").ok_or("target_info not found")?;
+                let id = target_info.get("id").ok_or("id not found")?.as_str().ok_or("id not str")?;
+                let username = target_info.get("username").ok_or("username not found")?.as_str().ok_or("username not str")?;
+                ret_vec.push(FriendInfo {
+                    user_id: id.parse::<u64>()?,
+                    nickname: username.to_owned(),
+                    remark: username.to_owned()
+                });
+            }
+        }
+        Ok(ret_vec)
+    }
+
     async fn set_group_name(&self,group_id:&str,name:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["channel_id"] = group_id.into();
@@ -303,6 +335,17 @@ impl KookOnebot {
         json["target_id"] = group_id.into();
         json["type"] = tp.into();
         let ret_json = self.http_post_json("/message/create",&json).await?;
+        let msg_id = ret_json.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
+        Ok(msg_id.to_owned())
+    }
+
+    #[allow(dead_code)]
+    async fn send_private_msg(&self,tp:i32,user_id:&str,message:&str)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let mut json:serde_json::Value = serde_json::from_str("{}")?;
+        json["content"] = message.into();
+        json["target_id"] = user_id.into();
+        json["type"] = tp.into();
+        let ret_json = self.http_post_json("/direct-message/create",&json).await?;
         let msg_id = ret_json.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
         Ok(msg_id.to_owned())
     }
@@ -371,6 +414,22 @@ impl KookOnebot {
         let tm = SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs().to_string();
         let ret = format!("{{\"meta_event_type\":\"lifecycle\",\"post_type\":\"meta_event\",\"self_id\":{self_id},\"sub_type\":\"connect\",\"time\":{tm}}}");
         Ok(ret)
+    }
+    pub async fn get_heartbeat_event(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        let self_id = self.self_id;
+        let tm = SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs().to_string();
+        let js = serde_json::json!({
+            "time":tm,
+            "self_id":self_id,
+            "post_type":"meta_event",
+            "meta_event_type":"heartbeat",
+            "interval":5000,
+            "status":{
+                "online":true,
+                "good":true
+            }
+        });
+        Ok(js.to_string())
     }
     async fn deal_group_message_event(&self,data:&serde_json::Value,user_id:u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let group_id_str = data.get("target_id").ok_or("target_id not found")?.as_str().ok_or("target_id not str")?;
@@ -514,6 +573,59 @@ impl KookOnebot {
         }
         Ok(())
     }
+
+    async fn deal_private_message_event(&self,data:&serde_json::Value,user_id:u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut message = data.get("content").ok_or("content not found")?.as_str().ok_or("content not str")?.to_owned();
+        
+        let extra = data.get("extra").ok_or("extra not found")?;
+        let author = extra.get("author").ok_or("author not found")?;
+
+        let username = author.get("username").ok_or("username not found")?.as_str().ok_or("username not str")?;
+
+        let sender: FriendInfo = FriendInfo {
+            user_id,
+            nickname: username.to_owned(),
+            remark: username.to_owned(),
+        };
+
+        // let message_id_str = data.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
+        let msg_type = data.get("type").ok_or("type not found")?.as_i64().ok_or("type not i64")?;
+        if msg_type == 2 { // 图片消息
+            message = format!("[CQ:image,file={},url={}]",cq_params_encode(&message),cq_params_encode(&message));
+        }
+
+        fn reformat_dates(before: &str) -> String {
+            lazy_static! {
+                static ref AT_REGEX : Regex = Regex::new(
+                    r"\(met\)(?P<qq>(\d+)|(all))\(met\)"
+                    ).unwrap();
+            }
+            AT_REGEX.replace_all(before, "[CQ:at,qq=$qq]").to_string()
+        }
+        let raw_msg_id = data.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
+        let msg_id = crate::msgid_tool::add_msg_id(QMessageStruct {raw_ids:vec![raw_msg_id.to_owned()], user_id });
+        let msg = reformat_dates(&message);
+        let  event_json = serde_json::json!({
+            "time":SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs(),
+            "self_id":self.self_id,
+            "post_type":"message",
+            "message_type":"private",
+            "sub_type":"friend",
+            "message_id":msg_id,
+            "user_id":user_id,
+            "message":msg,
+            "raw_message":msg,
+            "font":0,
+            "sender":sender
+        });
+        let lk = G_ONEBOT_RX.read().await;
+        for (_,v) in &*lk {
+            v.send(event_json.to_string()).await?;
+        }
+        Ok(())
+    }
+
+
     async fn deal_group_decrease_event(&self,data:&serde_json::Value) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let guild_id_str = data.get("target_id").ok_or("target_id not found")?.as_str().ok_or("target_id not str")?;
         let group_list = self.get_channel_list(guild_id_str).await?;
@@ -542,7 +654,7 @@ impl KookOnebot {
         Ok(())
     }
 
-    async fn deal_group_group_recall(&self,data:&serde_json::Value) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_group_recall(&self,data:&serde_json::Value) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let msg_id_str = data.get("extra").ok_or("extra not found")?
                                 .get("body").ok_or("body not found")?
                                 .get("msg_id").ok_or("msg_id not found")?
@@ -562,6 +674,34 @@ impl KookOnebot {
             "group_id":group_id,
             "user_id": user_id,
             "operator_id":1,
+            "message_id": cq_id
+        });
+        let lk = G_ONEBOT_RX.read().await;
+        for (_,v) in &*lk {
+            v.send(event_json.to_string()).await?;
+        }
+        Ok(())
+    }
+
+
+    async fn deal_private_recall(&self,data:&serde_json::Value) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let msg_id_str = data.get("extra").ok_or("extra not found")?
+                                .get("body").ok_or("body not found")?
+                                .get("msg_id").ok_or("msg_id not found")?
+                                .as_str().ok_or("msg_id not str")?;
+        let user_id_str = data.get("extra").ok_or("extra not found")?
+                                .get("body").ok_or("body not found")?
+                                .get("author_id").ok_or("author_id not found")?
+                                .as_str().ok_or("author_id not str")?;
+        let user_id = user_id_str.parse::<u64>()?;
+        let (cq_id,_user_id) = crate::msgid_tool::get_cq_msg_id(msg_id_str);
+        // self.get_msg(msg_id_str).await?;
+        let  event_json = serde_json::json!({
+            "time":SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs(),
+            "self_id":self.self_id,
+            "post_type":"notice",
+            "notice_type":"friend_recall",
+            "user_id": user_id,
             "message_id": cq_id
         });
         let lk = G_ONEBOT_RX.read().await;
@@ -615,7 +755,7 @@ impl KookOnebot {
             } else if sub_type == "joined_guild" {
                 self.deal_group_increase_event(data).await?;
             } else if sub_type == "deleted_message" {
-                self.deal_group_group_recall(data).await?;
+                self.deal_group_recall(data).await?;
             }
         } else {
             let self_id = self.self_id;
@@ -638,9 +778,11 @@ impl KookOnebot {
             let sub_type = data.get("extra").ok_or("extra not found")?.get("type").ok_or("type not found")?.as_str().ok_or("type not str")?;
             if sub_type == "self_exited_guild" {
                 // self.deal_group_kick_me_event(data).await?;
+            } else if sub_type == "deleted_private_message" {
+                self.deal_private_recall(data).await?;
             }
         } else {
-            // self.deal_group_message_event(data,user_id).await?;
+            self.deal_private_message_event(data,user_id).await?;
         }
         Ok(())
     }
@@ -712,6 +854,71 @@ impl KookOnebot {
         let mut msg_ids = vec![];
         for (tp,msg) in & to_send_data.clone() {
             let msg_id = self.send_group_msg(*tp,&group_id,msg).await?;
+            msg_ids.push(msg_id);
+        }
+        let msg_id = crate::msgid_tool::add_msg_id(QMessageStruct{ raw_ids: msg_ids, user_id: self.self_id });
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": {
+                "message_id":msg_id
+            },
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
+
+    async fn deal_ob_send_private_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let user_id = get_json_str(params,"user_id");
+        let message_arr:serde_json::Value;
+        let message_rst = params.get("message").ok_or("message not found")?;
+        
+        if message_rst.is_string() {
+            message_arr = str_msg_to_arr(message_rst)?;
+        }else {
+            message_arr = params.get("message").ok_or("message not found")?.to_owned();
+        }
+        
+        let mut to_send_data: Vec<(i32, String)> = vec![];
+        let mut last_type = 1;
+        for it in message_arr.as_array().ok_or("message not arr")? {
+            let tp = it.get("type").ok_or("type not found")?;
+            if tp == "text"{
+                let t = it.get("data").ok_or("data not found")?.get("text").ok_or("text not found")?.as_str().ok_or("text not str")?.to_owned();
+                let s = make_kook_text(&t);
+                if last_type == 1 && to_send_data.len() != 0 {
+                    let l = to_send_data.len();
+                    to_send_data.get_mut(l - 1).unwrap().1.push_str(&s);
+                } else {
+                    to_send_data.push((1,s));
+                    last_type = 1;
+                }
+            }else if tp == "image"{
+                let file = it.get("data").ok_or("data not found")?.get("file").ok_or("file not found")?.as_str().ok_or("file not str")?;
+                let file_url = self.upload_image(file).await?;
+                to_send_data.push((2,file_url));
+                last_type = 2;
+            }
+            else if tp == "at"{
+                // 私聊不支持at
+            }
+            else {
+                let j = serde_json::json!([it]);
+                let s = arr_to_cq_str(&j)?;
+                let s2 = make_kook_text(&s);
+                if last_type == 1 && to_send_data.len() != 0 {
+                    let l = to_send_data.len();
+                    to_send_data.get_mut(l - 1).unwrap().1.push_str(&s2);
+                } else {
+                    to_send_data.push((1,s2));
+                    last_type = 1;
+                }
+            }
+        }
+        let mut msg_ids = vec![];
+        for (tp,msg) in & to_send_data.clone() {
+            let msg_id = self.send_private_msg(*tp,&user_id,msg).await?;
             msg_ids.push(msg_id);
         }
         let msg_id = crate::msgid_tool::add_msg_id(QMessageStruct{ raw_ids: msg_ids, user_id: self.self_id });
@@ -853,6 +1060,17 @@ impl KookOnebot {
         Ok(send_json)
     }
 
+    async fn deal_ob_get_friend_list(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let info = self.get_friend_list().await?;
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": info,
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
     // 这个函数处理onebot的api调用
     pub async fn deal_onebot(&self,_uid:&str,text:&str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let js:serde_json::Value = serde_json::from_str(&text)?;
@@ -865,6 +1083,17 @@ impl KookOnebot {
         send_json = match action {
             "send_group_msg" => {
                 self.deal_ob_send_group_msg(&params,&js,&echo).await?
+            },
+            "send_private_msg" => {
+                self.deal_ob_send_private_msg(&params,&js,&echo).await?
+            },
+            "send_msg" => {
+                let group_id = get_json_str(params, "group_id");
+                if group_id != "" {
+                    self.deal_ob_send_group_msg(&params,&js,&echo).await?
+                }else {
+                    self.deal_ob_send_private_msg(&params,&js,&echo).await?
+                }
             },
             "get_login_info" => {
                 self.deal_ob_get_login_info(&params,&js,&echo).await?
@@ -895,6 +1124,9 @@ impl KookOnebot {
             },
             "set_group_card" => {
                 self.deal_ob_set_group_card(&params,&js,&echo).await?
+            }
+            "get_friend_list" => {
+                self.deal_ob_get_friend_list(&params,&js,&echo).await?
             }
             "can_send_image" => {
                 serde_json::json!({
@@ -929,7 +1161,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.1",
+                        "app_version":"0.0.3",
                         "protocol_version":"v11"
                     },
                     "echo":echo
@@ -990,6 +1222,14 @@ struct StrangerInfo {
     nickname:String,
     sex:String,
     age:i32
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FriendInfo {
+    user_id:u64,
+    nickname:String,
+    remark:String,
 }
 
 #[allow(dead_code)]

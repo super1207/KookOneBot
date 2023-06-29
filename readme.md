@@ -2,7 +2,7 @@
 
 为kook实现onebot11协议！（仅支持正向ws和正向http）
 
-注意，群聊==频道
+注意，群聊==频道，好友==私信
 
 
 ## 网络协议实现
@@ -18,6 +18,10 @@
 #### send_group_msg 发送群消息
 
 目前支持文字、图片、at
+
+#### send_private_msg 发送私聊消息
+
+目前支持文字、图片
 
 #### get_login_info 获取登录号信息
 
@@ -38,8 +42,6 @@
 成员信息尽力提供，服务器拥有者，被认为是owner，若有加入某角色，被认为是admin，否则被认为是member。
 
 #### send_msg 发送消息
-
-目前仅支持发送群聊消息
 
 #### can_send_image 检查是否可以发送图片
 
@@ -69,22 +71,18 @@
 
 实际上会设置该用户在服务器中的名字
 
+#### get_friend_list 获取好友列表
+
+实际上获取在bot的私信列表上的人
+
 
 ### 正在研究
 
-send_private_msg 发送私聊消息
 
-get_msg 获取消息(获取消息需要数据库支持才行)
+get_msg 获取消息(可能需要数据库支持才行)
 
-set_group_ban 群组单人禁言
 
-set_group_whole_ban 群组全员禁言
-
-set_group_admin 群组设置管理员
-
-get_friend_list 获取好友列表
-
-set_group_add_request 处理加群请求／邀请(kook的bot被邀请就会同意，不需要处理)
+set_group_add_request 处理加群请求（我只有一个手机号，只能注册一个kook账号，目前没法编写这个）
 
 
 ### 不实现
@@ -119,6 +117,14 @@ get_record 获取语音(kook不支持发送语音，所以也不存在获取语�
 
 set_group_special_title 设置群组专属头衔(kook没有这个)
 
+set_group_ban 群组单人禁言kook的权限机制不好实现这个）
+
+set_group_whole_ban 群组全员禁言kook的权限机制不好实现这个）
+
+set_group_admin 群组设置管理员kook的权限机制不好实现这个）
+
+set_group_add_request 处理加群邀请(kook的bot被邀请就会同意，不需要处理)
+
 ## 事件
 
 ### 已实现
@@ -127,9 +133,13 @@ set_group_special_title 设置群组专属头衔(kook没有这个)
 
 目前接收文字、图片、at
 
+#### 私聊消息
+
+目前接收文字、图片
+
 #### 生命周期
 
-仅connect
+仅connect，其它生命周期没啥用。
 
 #### 群成员减少
 
@@ -145,21 +155,19 @@ sub_type只支持approve，无论是被邀请还是自己加入，均为approve�
 
 无法获得正确的operator_id，kook没有提供
 
+#### 好友消息撤回
+
 #### 群文件上传
 
 busid 始终为0，也没啥用
 
+#### 心跳
+
+固定为5秒一次
+
 ### 正在研究
 
-私聊消息
-
-群管理员变动
-
-群禁言
-
-好友消息撤回
-
-加群请求／邀请
+加群请求（我只有一个手机号，只能注册一个kook账号，目前没法编写这个）
 
 ### 不实现
 
@@ -173,4 +181,8 @@ busid 始终为0，也没啥用
 
 加好友请求（kook没有这个）
 
-心跳（没必要）
+群管理员变动（kook的权限机制不好实现这个）
+
+群禁言（kook的权限机制不好实现这个）
+
+加群邀请（bot被邀请就会自己同意）

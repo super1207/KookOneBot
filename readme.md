@@ -4,7 +4,7 @@
 
 注意，群聊==频道，好友==私信
 
-如果您不想自己去编译，您可以在这里下载测试版本的windows可执行文件：https://super1207.lanzoub.com/iFN1H10pa3yj
+如果您不想自己去编译，您可以在这里下载测试版本的windows可执行文件：https://super1207.lanzoub.com/iugsf10rjh0f
 
 我们为此项目创建了一个KOOK群，欢迎来玩，邀请链接：https://kook.top/3SEwQj
 

@@ -53,10 +53,27 @@ async fn serve_websocket(uid:&str,websocket: hyper_tungstenite::HyperWebsocket) 
     let life_event = kb.get_lifecycle_event().await?;
     write_half.send(hyper_tungstenite::tungstenite::Message::Text(life_event)).await?;
 
+    let heartbeat = kb.get_heartbeat_event().await?;
+    let tx_copy = tx.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            let ret = tx_copy.send(heartbeat.clone()).await;
+            if ret.is_err() {
+                println!("heartbeat err:{}",ret.err().unwrap());
+                break;
+            }
+        }
+    });
+
     tokio::spawn(async move {
         // 将收到的事件发送到onebot客户端
         while let Some(msg) = rx.recv().await {
-            let _ret = write_half.send(hyper_tungstenite::tungstenite::Message::Text(msg)).await;
+            let ret = write_half.send(hyper_tungstenite::tungstenite::Message::Text(msg)).await;
+            if ret.is_err() {
+                println!("write_half send err:{}",ret.err().unwrap());
+                break;
+            }
         }
     });
 
@@ -209,7 +226,7 @@ async fn connect_handle(mut request: hyper::Request<hyper::Body>) -> Result<hype
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
-    println!("欢迎使用KookOnebot by super1207!!! v0.0.1");
+    println!("欢迎使用KookOnebot by super1207!!! v0.0.3");
 
     let config_file = read_config().await.unwrap();
 
@@ -242,6 +259,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut lk = G_KOOK_TOKEN.write().await;
         (*lk) = kb.token.to_owned();
     }
+
+    kb.get_friend_list().await.unwrap();
+
     tokio::spawn(async move {
         loop {
             let err = kb.connect().await;

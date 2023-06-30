@@ -42,7 +42,7 @@ pub async fn read_config() -> Result<serde_json::Value, Box<dyn std::error::Erro
         }
     }
     if !is_file_exists{
-        tokio::fs::write(config_file_dir.clone(), "{\"web_port\":8080,\"kook_token\":\"\",\"access_token\":\"\",\"web_host\":\"127.0.0.1\"}").await?;
+        tokio::fs::write(config_file_dir.clone(), "{\"web_port\":8080,\"kook_token\":\"\",\"access_token\":\"\",\"web_host\":\"127.0.0.1\",\"reverse_url\":[]}").await?;
         println!("config.json文件不存在，为您自动生成！请自行修改后重新运行！！！");
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;

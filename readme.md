@@ -1,6 +1,6 @@
 # KookOnebot
 
-为kook实现onebot11协议！（仅支持正向ws和正向http）
+为kook实现onebot11协议！
 
 注意，群聊==频道，好友==私信
 
@@ -11,11 +11,44 @@
 [红色问答](https://github.com/super1207/redreply)、[MiraiCQ](https://github.com/super1207/redreply) 与此项目配合更佳，欢迎加入为它们创建的QQ群：920220179、556515826
 
 
+## 配置文件
+
+config.json 例子： 
+
+```json
+{
+	"web_port": 8080,
+    "web_host": "127.0.0.1",
+	"kook_token": "1/MTUyNDY=/snqjxHpGZFdEM50wyZLOpg==",
+	"access_token": "123456",
+	"reverse_uri": ["http://127.0.0.1:55001/OlivOSMsgApi/pp/onebot/default",
+                    "ws://127.0.0.1:5555/some"]
+}
+```
+
+解释：
+
+web_port：正向http和正向websocket需要这个端口号，若不使用正向http和正向websocket，填0即可。
+
+web_host：正向http和正向websocket需要这个，若想要外网访问，填`0.0.0.0`，若不使用正向http和正向websocket，填`0`即可。
+
+kook_token：kook的token，请到此处去获得：[KOOK 开发者中心 - 机器人 (kookapp.cn)](https://developer.kookapp.cn/app/index)
+
+access_token：正向http和正向websocket需要，若不需要访问密码，填`""`即可。
+
+reverse_uri：反向http和反向websocket需要这个，若不需要反向http或反向ws，填`[]`即可。
+
+**注意：所有的字段都是必填的，不可省略！！！**
+
 ## 网络协议实现
 
 正向ws
 
 正向http，端口号和正向ws相同，自动识别！
+
+反向ws（**未测试过**）
+
+反向 http
 
 ## API
 
@@ -145,7 +178,7 @@ set_group_add_request 处理加群邀请(kook的bot被邀请就会同意，不�
 
 #### 生命周期
 
-仅connect，其它生命周期没啥用。
+仅connect（反向http没有此事件），其它生命周期没啥用。
 
 #### 群成员减少
 
@@ -169,7 +202,7 @@ busid 始终为0，也没啥用
 
 #### 心跳
 
-固定为5秒一次
+目前固定为5秒一次
 
 ### 正在研究
 

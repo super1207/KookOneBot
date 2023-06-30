@@ -1,6 +1,6 @@
 # KookOnebot
 
-为kook实现onebot11协议！
+为kook实现[onebot11](https://github.com/botuniverse/onebot-11)协议！
 
 注意，群聊==频道，好友==私信
 

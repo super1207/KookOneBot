@@ -18,11 +18,13 @@ config.json 例子：
 ```json
 {
 	"web_port": 8080,
-    "web_host": "127.0.0.1",
+	"web_host": "127.0.0.1",
 	"kook_token": "1/MTUyNDY=/snqjxHpGZFdEM50wyZLOpg==",
 	"access_token": "123456",
-	"reverse_uri": ["http://127.0.0.1:55001/OlivOSMsgApi/pp/onebot/default",
-                    "ws://127.0.0.1:5555/some"]
+	"reverse_uri": [
+				"http://127.0.0.1:55001/OlivOSMsgApi/pp/onebot/default",
+                        	"ws://127.0.0.1:5555/some"
+			]
 }
 ```
 

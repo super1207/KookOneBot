@@ -58,11 +58,11 @@ reverse_uri：反向http和反向websocket需要这个，若不需要反向http�
 
 #### send_group_msg 发送群消息
 
-目前支持文字、图片、at
+目前支持文字、图片、at、回复
 
 #### send_private_msg 发送私聊消息
 
-目前支持文字、图片
+目前支持文字、图片、回复
 
 #### get_login_info 获取登录号信息
 
@@ -172,11 +172,11 @@ set_group_add_request 处理加群邀请(kook的bot被邀请就会同意，不�
 
 #### 群消息 
 
-目前接收文字、图片、at
+目前接收文字、图片、at、回复
 
 #### 私聊消息
 
-目前接收文字、图片
+目前接收文字、图片、回复
 
 #### 生命周期
 

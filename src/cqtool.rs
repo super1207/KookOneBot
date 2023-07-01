@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use regex::Regex;
+
 
 fn cq_text_encode(data:&str) -> String {
     let mut ret_str:String = String::new();
@@ -243,4 +245,25 @@ pub fn make_kook_text(text:&str) -> String {
         s.push(it);
     }
     s
+}
+
+fn reformat_dates(before: &str) -> String {
+    lazy_static! {
+        static ref AT_REGEX : Regex = Regex::new(
+            r"\(met\)(?P<qq>(\d+)|(all))\(met\)"
+            ).unwrap();
+    }
+    AT_REGEX.replace_all(before, "[CQ:at,qq=$qq]").to_string()
+}
+
+pub fn kook_msg_to_cq(msg_type:i64,message:&str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+
+    let ret_msg;
+    if msg_type == 2 { // 图片消息
+        ret_msg = format!("[CQ:image,file={},url={}]",cq_params_encode(&message),cq_params_encode(&message));
+    } else {
+        ret_msg = reformat_dates(message);
+    }
+    
+    Ok(ret_msg)
 }

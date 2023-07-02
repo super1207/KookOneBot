@@ -57,7 +57,7 @@ async fn deal_ws2(url:&str,
                         lk.remove(&url_t);
                     }
                 }
-                println!("ONEBOT_WS_REV心跳包发送出错:{}",ret.err().unwrap());
+                log::error!("ONEBOT_WS_REV心跳包发送出错:{}",ret.err().unwrap());
                 break;
             }
         }
@@ -76,7 +76,7 @@ async fn deal_ws2(url:&str,
                         lk.remove(&url_t);
                     }
                 }
-                println!("ONEBOT_WS_REV数据发送出错:{}",ret.err().unwrap());
+                log::error!("ONEBOT_WS_REV数据发送出错:{}",ret.err().unwrap());
                 break;
             }
         }
@@ -105,7 +105,7 @@ async fn deal_ws2(url:&str,
         // 处理onebot的api调用
         let ret = kb.deal_onebot(url,msg_text).await;
         if ret.is_err() {
-            println!("ONEBOT_WS_REV动作调用出错:{ret:?}");
+            log::error!("ONEBOT_WS_REV动作调用出错:{ret:?}");
         }else {
             // 发回到onebot客户端
             tx.send(ret.unwrap()).await?;
@@ -119,7 +119,7 @@ async fn onebot_rev_ws(ws_url:String) {
     loop {
         let rst = tokio_tungstenite::connect_async(ws_url.clone()).await;
         if rst.is_err() {
-            println!("连接到WS_REV:{ws_url} 失败");
+            log::error!("连接到WS_REV:{ws_url} 失败");
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             continue;
         }
@@ -127,7 +127,7 @@ async fn onebot_rev_ws(ws_url:String) {
         let (write_halt,read_halt) = ws_stream.split();
         let rst = deal_ws2(&ws_url,write_halt,read_halt).await;
         if rst.is_err() {
-            println!("WS_REV:{ws_url} 断开连接");
+            log::error!("WS_REV:{ws_url} 断开连接");
         }
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
     }

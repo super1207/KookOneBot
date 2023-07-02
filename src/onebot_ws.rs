@@ -41,7 +41,7 @@ async fn deal_ws(uid:&str,
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             let ret = tx_copy.send(heartbeat.clone()).await;
             if ret.is_err() {
-                println!("ONEBOT_WS心跳包发送出错:{}",ret.err().unwrap());
+                log::error!("ONEBOT_WS心跳包发送出错:{}",ret.err().unwrap());
                 break;
             }
         }
@@ -52,7 +52,7 @@ async fn deal_ws(uid:&str,
         while let Some(msg) = rx.recv().await {
             let ret = write_half.send(hyper_tungstenite::tungstenite::Message::Text(msg)).await;
             if ret.is_err() {
-                println!("ONEBOT_WS数据发送出错:{}",ret.err().unwrap());
+                log::error!("ONEBOT_WS数据发送出错:{}",ret.err().unwrap());
                 break;
             }
         }
@@ -68,7 +68,7 @@ async fn deal_ws(uid:&str,
         // 处理onebot的api调用
         let ret = kb.deal_onebot(uid,msg_text).await;
         if ret.is_err() {
-            println!("ONEBOT_WS动作调用出错:{ret:?}");
+            log::error!("ONEBOT_WS动作调用出错:{ret:?}");
         }else {
             // 发回到onebot客户端
             tx.send(ret.unwrap()).await?;

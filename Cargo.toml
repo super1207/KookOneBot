@@ -25,3 +25,7 @@ regex = "1.8.4"
 base64 = "0.21.0"
 urlencoding = "2.1.2"
 url = "2.4.0"
+log = "0.4.17"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter","time","local-time"]}
+time = { version = "0.3", features = ["formatting", "macros"] }

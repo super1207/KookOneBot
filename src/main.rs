@@ -23,9 +23,10 @@ lazy_static! {
 use std::{collections::HashMap, sync::{Arc, atomic::AtomicI64}};
 use hyper_tungstenite::hyper;
 use kook_onebot::KookOnebot;
+use time::UtcOffset;
+use ::time::format_description;
 use tokio::sync::RwLock;
 use hyper::{service::make_service_fn};
-
 use crate::config_tool::read_config;
 
 
@@ -34,7 +35,7 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
     let is_pass = onebot_http::check_auth(&request).await?;
 
     if is_pass == false {
-        println!("WS鉴权失败!");
+        log::error!("WS鉴权失败!");
         let mut res = hyper::Response::new(hyper::Body::from(vec![]));
         *res.status_mut() = hyper::StatusCode::NOT_FOUND;
         return Ok(res);
@@ -42,11 +43,11 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
     // 处理正向ws
     if hyper_tungstenite::is_upgrade_request(&request) {
         let uid = uuid::Uuid::new_v4().to_string();
-        println!("接收到WS连接`{uid}`");
+        log::warn!("接收到WS连接`{uid}`");
         let (response, websocket): (hyper::Response<hyper::Body>, hyper_tungstenite::HyperWebsocket) = hyper_tungstenite::upgrade(request, None)?;
         tokio::spawn(async move {
             let ret = onebot_ws::deal_onebot_ws(&uid,websocket).await;
-            println!("WS断开连接:`{uid}`,`{ret:?}`");
+            log::error!("WS断开连接:`{uid}`,`{ret:?}`");
         });
         return Ok(response);
     } else {
@@ -60,9 +61,21 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
-    println!("欢迎使用KookOnebot by super1207!!! v0.0.4");
+    // 初始化日志
+    let format = "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]";
+    tracing_subscriber::fmt()
+    .with_timer(tracing_subscriber::fmt::time::OffsetTime::new(
+        UtcOffset::current_local_offset().unwrap(),
+        format_description::parse(format).unwrap(),
+    )).with_max_level(tracing::Level::INFO)
+    .init();
 
-    println!("正在加载配置文件...");
+
+    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.5");
+
+    log::warn!("开源地址:https://github.com/super1207/KookOneBot");
+
+    log::warn!("正在加载配置文件...");
 
     let config_file = read_config().await.unwrap();
 
@@ -83,18 +96,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     *G_ACCESS_TOKEN.write().await = access_token.to_owned();
 
 
-    println!("加载配置文件成功");
+    log::warn!("加载配置文件成功");
 
     let mut kb = KookOnebot {
         token:kook_token.to_owned(),
         self_id:0,
         sn: Arc::new(AtomicI64::new(0)),
     };
-    println!("正在登录中...");
+    log::warn!("正在登录中...");
     let login_info = kb.get_login_info().await?;
 
 
-    println!("欢迎 `{}`({})！",login_info.nickname,login_info.user_id);
+    log::warn!("欢迎 `{}`({})！",login_info.nickname,login_info.user_id);
     let self_id = login_info.user_id;
     kb.self_id = self_id;
     {
@@ -109,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     tokio::spawn(async move {
         loop {
             let err = kb_t.connect().await;
-            println!("{err:?}");
+            log::error!("KOOK连接断开：{err:?}");
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
     });
@@ -128,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if web_host != ""  && web_port != 0{
         let web_uri = format!("{web_host}:{web_port}");
-        println!("监听地址：{web_uri}");
+        log::warn!("监听地址：{web_uri}");
         let addr = web_uri.parse::<std::net::SocketAddr>()?;
         let bd_rst = hyper::Server::try_bind(&addr);
         if bd_rst.is_ok() {

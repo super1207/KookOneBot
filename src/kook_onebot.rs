@@ -31,13 +31,13 @@ impl KookOnebot {
     }
 
     async fn send_to_onebot_client(&self,json_str:&str) {
-        println!("发送ONEBOT事件:{json_str}");
+        log::info!("发送ONEBOT事件:{json_str}");
         {
             let lk = G_ONEBOT_RX.read().await;
             for (_,v) in &*lk {
                 let rst = v.0.send(json_str.to_string()).await;
                 if rst.is_err() {
-                    println!("发送事件到ONEBOT_WS客户端出错:`{}`",rst.err().unwrap());
+                    log::error!("发送事件到ONEBOT_WS客户端出错:`{}`",rst.err().unwrap());
                 }
             }
         }
@@ -52,7 +52,7 @@ impl KookOnebot {
             tokio::spawn(async move{
                 let rst = Self::post_to_client(&uri_t,&json_str_t,self_id_t).await;
                 if rst.is_err() {
-                    println!("发送事件到ONEBOT_HTTP客户端出错:`{}`",rst.err().unwrap());
+                    log::error!("发送事件到ONEBOT_HTTP客户端出错:`{}`",rst.err().unwrap());
                 }
             });
         }
@@ -60,7 +60,7 @@ impl KookOnebot {
     }
 
     async fn http_get_json(&self,uri:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-        println!("发送KOOK_GET:{uri}");
+        log::info!("发送KOOK_GET:{uri}");
         let uri = reqwest::Url::from_str(&format!("https://www.kookapp.cn/api/v3{uri}"))?;
         let client = reqwest::Client::builder().danger_accept_invalid_certs(true).no_proxy().build()?;
         let mut req = client.get(uri).build()?;
@@ -69,7 +69,7 @@ impl KookOnebot {
         let ret = client.execute(req).await?;
         let retbin = ret.bytes().await?.to_vec();
         let ret_str = String::from_utf8(retbin)?;
-        println!("KOOK_GET响应:{ret_str}");
+        log::info!("KOOK_GET响应:{ret_str}");
         let js:serde_json::Value = serde_json::from_str(&ret_str)?;
         let ret = js.get("data").ok_or("get data err")?;
         Ok(ret.to_owned())
@@ -77,7 +77,7 @@ impl KookOnebot {
 
     async fn http_post_json(&self,uri:&str,json:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>>{
         let json_str = json.to_string();
-        println!("发送KOOK_POST:{uri}\n{}",json_str);
+        log::info!("发送KOOK_POST:{uri}\n{}",json_str);
         let uri = reqwest::Url::from_str(&format!("https://www.kookapp.cn/api/v3{uri}"))?;
         let client = reqwest::Client::builder().danger_accept_invalid_certs(true).no_proxy().build()?;
         let mut req = client.post(uri).body(reqwest::Body::from(json_str)).build()?;
@@ -87,7 +87,7 @@ impl KookOnebot {
         let ret = client.execute(req).await?;
         let retbin = ret.bytes().await?.to_vec();
         let ret_str = String::from_utf8(retbin)?;
-        println!("KOOK_POST响应:{ret_str}");
+        log::info!("KOOK_POST响应:{ret_str}");
         let js:serde_json::Value = serde_json::from_str(&ret_str)?;
         let ret = js.get("data").ok_or("get data err")?;
         Ok(ret.to_owned())
@@ -246,7 +246,6 @@ impl KookOnebot {
     #[allow(dead_code)]
     async fn get_msg(&self,msg_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let _msg_info = self.http_get_json(&format!("/message/view?msg_id={msg_id}")).await?;
-        // println!("msg_info:{}",msg_info.to_string());
         Ok(())
     }
 
@@ -262,7 +261,6 @@ impl KookOnebot {
             role = "owner";
         }else {
             let roles = stranger_info.get("roles").ok_or("get roles err")?.as_array().ok_or("roles not arr")?;
-            // println!("roles:{:?}",roles);
             if roles.len() != 0 { 
                 role = "admin";
             } else {
@@ -366,13 +364,6 @@ impl KookOnebot {
         Ok(())
     }
 
-    // #[allow(dead_code)]
-    // pub async fn get_friend_list(&self)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    //     let friend_list = self.http_get_json(&format!("/user-chat/list")).await?;
-    //     println!("friend_list:{}",friend_list.to_string());
-    //     Ok(())
-    // }
-
     #[allow(dead_code)]
     async fn send_group_msg(&self,tp:i32,group_id:&str,message:&str,quote:&str)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
@@ -409,7 +400,7 @@ impl KookOnebot {
 
     pub async fn connect(&self)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let wss_url = self.get_gateway().await?;
-        println!("正在连接KOOK端口...");
+        log::warn!("正在连接KOOK端口...");
         let (ws_stream, _) = connect_async(wss_url).await?;
         let (mut write_halt,mut read_halt) = ws_stream.split();
         let sn_ptr = self.sn.clone();
@@ -420,10 +411,10 @@ impl KookOnebot {
                     "s": 2,
                     "sn": sn_ptr.load(std::sync::atomic::Ordering::Relaxed)
                 }).to_string();
-                println!("发送KOOK心跳:{json_str}");
+                log::info!("发送KOOK心跳:{json_str}");
                 let foo = write_halt.send(tungstenite::Message::Text(json_str)).await;
                 if foo.is_err() {
-                    println!("发送KOOK心跳失败");
+                    log::error!("发送KOOK心跳失败");
                     break;
                 }
             }
@@ -440,25 +431,25 @@ impl KookOnebot {
     
                 let s = js.get("s").ok_or("s not found")?.as_i64().ok_or("s not i64")?;
                 if s == 5 {
-                    println!("正在重连KOOK");
+                    log::warn!("正在重连KOOK");
                     break;
                 }
                 else if s == 1 {
-                    println!("连接KOOK成功");
+                    log::warn!("连接KOOK成功");
                 }
                 else if s == 0 {
-                    println!("收到KOOK事件:{}",js.to_string());
+                    log::info!("收到KOOK事件:{}",js.to_string());
                     let d = js.get("d").ok_or("d not found")?;
                     let sn = js.get("sn").ok_or("sn not found")?.as_i64().ok_or("sn not i64")?;
                     self.sn.store(sn, std::sync::atomic::Ordering::Relaxed);
                     let rst = self.deal_kook_event(d.clone()).await;
                     if rst.is_err() {
-                        println!("处理KOOK事件出错:{}",rst.err().unwrap());
+                        log::error!("处理KOOK事件出错:{}",rst.err().unwrap());
                     }
                 }else if s == 3 {
-                    println!("收到KOOK心跳响应包");
+                    log::info!("收到KOOK心跳响应包");
                 } else {
-                    println!("收到未知的KOOK数据:{}",js.to_string());
+                    log::error!("收到未知的KOOK数据:{}",js.to_string());
                 }
             }
         }
@@ -1116,7 +1107,7 @@ impl KookOnebot {
         let params = js.get("params").unwrap_or(&def);
         let echo = get_json_str(&js,"echo");
         let send_json;
-        println!("收到来自onebot的动作:{text}");
+        log::info!("收到来自onebot的动作:{text}");
         send_json = match action {
             "send_group_msg" => {
                 self.deal_ob_send_group_msg(&params,&js,&echo).await?
@@ -1198,7 +1189,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.4",
+                        "app_version":"0.0.5",
                         "protocol_version":"v11"
                     },
                     "echo":echo
@@ -1214,7 +1205,7 @@ impl KookOnebot {
             }
         };
         let json_str = send_json.to_string();
-        println!("ONEBOT动作返回:{}",json_str);
+        log::info!("ONEBOT动作返回:{}",json_str);
         Ok(json_str)
     }
 }

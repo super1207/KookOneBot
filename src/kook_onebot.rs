@@ -20,18 +20,15 @@ pub struct KookOnebot {
 
 impl KookOnebot {
 
-
-
-    pub async fn post_to_client(&self,url:&str,json_str:&str) -> Result<(), Box<dyn std::error::Error + Send + Sync>>{
+    pub async fn post_to_client(url:&str,json_str:&str,self_id:u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>>{
         let uri = reqwest::Url::from_str(url)?;
         let client = reqwest::Client::builder().danger_accept_invalid_certs(true).no_proxy().build()?;
         let mut req = client.post(uri).body(reqwest::Body::from(json_str.to_owned())).build()?;
         req.headers_mut().append(HeaderName::from_str("Content-type")?, HeaderValue::from_str("application/json")?);
-        req.headers_mut().append(HeaderName::from_str("X-Self-ID")?, HeaderValue::from_str(&self.self_id.to_string())?);
+        req.headers_mut().append(HeaderName::from_str("X-Self-ID")?, HeaderValue::from_str(&self_id.to_string())?);
         client.execute(req).await?;
         Ok(())
     }
-
 
     async fn send_to_onebot_client(&self,json_str:&str) {
         println!("发送ONEBOT事件:{json_str}");
@@ -49,10 +46,15 @@ impl KookOnebot {
             if !uri.starts_with("http") {
                 continue;
             }
-            let rst = self.post_to_client(uri,json_str).await;
-            if rst.is_err() {
-                println!("发送事件到ONEBOT_HTTP客户端出错:`{}`",rst.err().unwrap());
-            }
+            let uri_t = uri.to_owned();
+            let json_str_t = json_str.to_owned();
+            let self_id_t = self.self_id;
+            tokio::spawn(async move{
+                let rst = Self::post_to_client(&uri_t,&json_str_t,self_id_t).await;
+                if rst.is_err() {
+                    println!("发送事件到ONEBOT_HTTP客户端出错:`{}`",rst.err().unwrap());
+                }
+            });
         }
         
     }
@@ -106,7 +108,7 @@ impl KookOnebot {
             let channel_arr = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
             for it2 in channel_arr {
                 let id = it2.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
-                // let id2 = format!("{it}-{id}");
+
                 let group_name = it2.get("name").ok_or("get name err")?.as_str().ok_or("name not str")?;
 
                 let tp = it2.get("type").ok_or("get type err")?.as_i64().ok_or("type not i64")?;
@@ -132,7 +134,7 @@ impl KookOnebot {
         let channel_arr = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
         for it2 in channel_arr {
             let id = it2.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
-            // let id2 = format!("{it}-{id}");
+
             let group_name = it2.get("name").ok_or("get name err")?.as_str().ok_or("name not str")?;
 
             let tp = it2.get("type").ok_or("get type err")?.as_i64().ok_or("type not i64")?;

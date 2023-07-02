@@ -10,7 +10,7 @@ pub async fn deal_heartbeat(kb2:KookOnebot) -> ! {
                 if !uri.starts_with("http") {
                     continue;
                 }
-                let rst = kb2.post_to_client(uri,&json_str).await;
+                let rst = KookOnebot::post_to_client(uri,&json_str,kb2.self_id).await;
                 if rst.is_err() {
                     println!("发送心跳事件到HTTP:`{uri}`失败");
                 }

@@ -48,7 +48,7 @@ reverse_uri：反向http和反向websocket需要这个，若不需要反向http�
 
 正向http，端口号和正向ws相同，自动识别！
 
-反向ws（**未测试过**）
+反向ws
 
 反向 http
 

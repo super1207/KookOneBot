@@ -38,7 +38,7 @@ impl KookOnebot {
         {
             let lk = G_ONEBOT_RX.read().await;
             for (_,v) in &*lk {
-                let rst = v.send(json_str.to_string()).await;
+                let rst = v.0.send(json_str.to_string()).await;
                 if rst.is_err() {
                     println!("发送事件到ONEBOT_WS客户端出错:`{}`",rst.err().unwrap());
                 }

@@ -11,7 +11,7 @@ extern crate lazy_static;
 lazy_static! {
     pub static ref G_SELF_ID:RwLock<u64> = RwLock::new(0);
     pub static ref G_KOOK_TOKEN:RwLock<String> = RwLock::new(String::new());
-    pub static ref G_ONEBOT_RX:RwLock<HashMap<String,tokio::sync::mpsc::Sender<String>>> = RwLock::new(HashMap::new());
+    pub static ref G_ONEBOT_RX:RwLock<HashMap<String,(tokio::sync::mpsc::Sender<String>,String)>> = RwLock::new(HashMap::new());
     pub static ref G_ACCESS_TOKEN:RwLock<String> = RwLock::new(String::new());
     pub static ref  G_REVERSE_URL:RwLock<Vec<String>> = RwLock::new(Vec::new());
 }
@@ -28,6 +28,8 @@ use tokio_tungstenite::connect_async;
 use crate::config_tool::read_config;
 
 
+
+// 正向ws
 async fn deal_ws(uid:&str,
     mut write_half: futures_util::stream::SplitSink<hyper_tungstenite::WebSocketStream<hyper::upgrade::Upgraded>, hyper_tungstenite::tungstenite::Message>,
     mut read_half: futures_util::stream::SplitStream<hyper_tungstenite::WebSocketStream<hyper::upgrade::Upgraded>>
@@ -43,7 +45,7 @@ async fn deal_ws(uid:&str,
     let (tx, mut rx) =  tokio::sync::mpsc::channel::<String>(60);
     {
         let mut lk = G_ONEBOT_RX.write().await;
-        lk.insert(uid.to_owned(), tx.clone());
+        lk.insert(uid.to_owned(), (tx.clone(),"".to_owned()));
     }
     let _guard = scopeguard::guard(uid.to_owned(), |uid: String| {
         tokio::spawn(async move {
@@ -100,7 +102,9 @@ async fn deal_ws(uid:&str,
     Ok(())
 }
 
-async fn deal_ws2(uid:&str,
+
+// 反向ws
+async fn deal_ws2(url:&str,
     mut write_half:futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, tungstenite::Message>,
     mut read_half: futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -110,17 +114,24 @@ async fn deal_ws2(uid:&str,
         self_id: G_SELF_ID.read().await.to_owned(),
         sn: Arc::new(AtomicI64::new(0)),
     };
+    let uid = uuid::Uuid::new_v4().to_string();
 
     // 获得升级后的ws流
     let (tx, mut rx) =  tokio::sync::mpsc::channel::<String>(60);
     {
         let mut lk = G_ONEBOT_RX.write().await;
-        lk.insert(uid.to_owned(), tx.clone());
+        lk.insert(url.to_string(), (tx.clone(),uid.clone()));
     }
+    
+    let url_t = url.to_owned();
     let _guard = scopeguard::guard(uid.to_owned(), |uid: String| {
         tokio::spawn(async move {
             let mut lk = G_ONEBOT_RX.write().await;
-            lk.remove(&uid);
+            if let Some(v) = lk.get(&url_t) {
+                if v.1 == uid {
+                    lk.remove(&url_t);
+                }
+            }
         });
     });
     
@@ -131,22 +142,38 @@ async fn deal_ws2(uid:&str,
 
     let heartbeat = kb.get_heartbeat_event().await?;
     let tx_copy = tx.clone();
+    let url_t = url.to_owned();
+    let uid_t = uid.to_owned();
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             let ret = tx_copy.send(heartbeat.clone()).await;
             if ret.is_err() {
+                let mut lk = G_ONEBOT_RX.write().await;
+                if let Some(v) = lk.get(&url_t) {
+                    if v.1 == uid_t {
+                        lk.remove(&url_t);
+                    }
+                }
                 println!("ONEBOT_WS_REV心跳包发送出错:{}",ret.err().unwrap());
                 break;
             }
         }
     });
 
+    let url_t = url.to_owned();
+    let uid_t = uid.to_owned();
     tokio::spawn(async move {
         // 将收到的事件发送到onebot客户端
         while let Some(msg) = rx.recv().await {
             let ret = write_half.send(tungstenite::Message::Text(msg)).await;
             if ret.is_err() {
+                let mut lk = G_ONEBOT_RX.write().await;
+                if let Some(v) = lk.get(&url_t) {
+                    if v.1 == uid_t {
+                        lk.remove(&url_t);
+                    }
+                }
                 println!("ONEBOT_WS_REV数据发送出错:{}",ret.err().unwrap());
                 break;
             }
@@ -155,13 +182,26 @@ async fn deal_ws2(uid:&str,
 
     // 接收来自onebot客户端的调用
     while let Some(msg_t) = read_half.next().await {
+
+        // 不存在连接，这退出接收
+        {
+            let lk = G_ONEBOT_RX.read().await;
+            if let Some(v) = lk.get(url) {
+                if v.1 != uid {
+                    break;
+                }
+            }else{
+                break;
+            }
+        }
+
         let msg = msg_t?;
         if ! msg.is_text() {
             continue;
         }
         let msg_text = msg.to_text()?;
         // 处理onebot的api调用
-        let ret = kb.deal_onebot(uid,msg_text).await;
+        let ret = kb.deal_onebot(url,msg_text).await;
         if ret.is_err() {
             println!("ONEBOT_WS_REV动作调用出错:{ret:?}");
         }else {
@@ -319,8 +359,7 @@ async fn onebot_rev_ws(ws_url:String) {
         }
         let (ws_stream, _) =  rst.unwrap();
         let (write_halt,read_halt) = ws_stream.split();
-        let uid = uuid::Uuid::new_v4().to_string();
-        let rst = deal_ws2(&uid,write_halt,read_halt).await;
+        let rst = deal_ws2(&ws_url,write_halt,read_halt).await;
         if rst.is_err() {
             println!("WS_REV:{ws_url} 断开连接");
         }

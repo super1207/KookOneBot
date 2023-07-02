@@ -4,8 +4,6 @@
 
 注意，群聊==频道，好友==私信
 
-如果您不想自己去编译，您可以在这里下载测试版本的windows可执行文件：https://files.catbox.moe/drau0r.rar
-
 我们为此项目创建了一个KOOK群，欢迎来玩，邀请链接：https://kook.top/3SEwQj
 
 [红色问答](https://github.com/super1207/redreply)、[MiraiCQ](https://github.com/super1207/redreply) 与此项目配合更佳，欢迎加入为它们创建的QQ群：920220179、556515826

@@ -12,7 +12,7 @@ use crate::{G_ONEBOT_RX, cqtool::{str_msg_to_arr, arr_to_cq_str, make_kook_text,
 
 
 #[derive(Clone)]
-pub(crate) struct KookOnebot {
+pub struct KookOnebot {
     pub token:String,
     pub self_id:u64,
     pub sn:Arc<AtomicI64>
@@ -1247,7 +1247,7 @@ struct GroupInfo {
 
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct LoginInfo {
+pub struct LoginInfo {
     pub user_id:u64,
     pub nickname:String
 }

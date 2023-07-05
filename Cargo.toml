@@ -7,16 +7,16 @@ edition = "2021"
 
 [dependencies]
 reqwest = {version = "0.11.18",default-features = false,features = ["rustls-tls","multipart"]}
-tokio = { version = "*", features = ["full"] }
-serde_json = "*"
-serde_derive = "*"
-serde = {version = "*",features = ["derive"]}
-tungstenite = "*"
-tokio-tungstenite = { version ="*", features = ["native-tls"] }
-futures-util = "*"
-flate2 = "*"
-hyper-tungstenite = "*"
-hyper = { version = "*", features = ["full"] }
+tokio = {version = "1.29.1",features = ["macros","rt-multi-thread","fs"]}
+serde_json = "1.0.100"
+serde_derive = "1.0.166"
+serde = {version = "1.0.166",features = ["derive"]}
+tungstenite = { version ="0.19.0",default-features = false,features = ["rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version ="0.19.0",default-features = false,features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3.28"
+flate2 = "1.0.26"
+hyper-tungstenite = "0.10.0"
+hyper = {version = "0.14.27",features = ["server"]}
 http-body-util = "0.1.0-rc.2"
 lazy_static = "1.4.0"
 uuid = {version = "1.3.0",features = ["v4","fast-rng"]}

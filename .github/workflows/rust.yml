@@ -31,14 +31,14 @@ jobs:
     - name: build
       run: |
         cross build --target i686-pc-windows-gnu --release
-        cross build --target armv7-unknown-linux-musl --release
+        cross build --target aarch64-unknown-linux-musl --release
         cross build --target i686-unknown-linux-musl --release
 
     - name: before_upload
       run: |
         mkdir Release
         cp target/i686-pc-windows-gnu/release/kook_onebot.exe Release/kook_onebot_windows_i686.exe
-        cp target/armv7-unknown-linux-musl/release/kook_onebot Release/kook_onebot_linux_armv7
+        cp target/aarch64-unknown-linux-musl/release/kook_onebot Release/kook_onebot_linux_aarch64
         cp target/i686-unknown-linux-musl/release/kook_onebot Release/kook_onebot_linux_i686
 
     - name: upload file1
@@ -51,9 +51,9 @@ jobs:
     - name: upload file2
       uses: actions/upload-artifact@v3
       with:
-        name: kook_onebot_linux_armv7
+        name: kook_onebot_linux_aarch64
         path: 
-            Release/kook_onebot_linux_armv7
+            Release/kook_onebot_linux_aarch64
 
     - name: upload file3
       uses: actions/upload-artifact@v3

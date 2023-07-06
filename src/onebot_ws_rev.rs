@@ -2,6 +2,7 @@ use std::{sync::{Arc, atomic::AtomicI64}, str::FromStr};
 
 use futures_util::{StreamExt, SinkExt};
 use hyper::http::{HeaderValue, HeaderName};
+use tokio::net::TcpStream;
 
 use crate::{G_REVERSE_URL, G_ONEBOT_RX, G_KOOK_TOKEN, G_SELF_ID, G_ACCESS_TOKEN};
 
@@ -127,7 +128,22 @@ async fn onebot_rev_ws(ws_url:String) {
         let self_id = G_SELF_ID.read().await;
         request.headers_mut().append(HeaderName::from_str("X-Self-ID").unwrap(), HeaderValue::from_str(&self_id.to_string()).unwrap());
         request.headers_mut().append(HeaderName::from_str("X-Client-Role").unwrap(), HeaderValue::from_str("Universal").unwrap());
-        let rst = tokio_tungstenite::connect_async(request).await;
+        let rst;
+        if ws_url.starts_with("wss://") {
+            let port_opt  = request.uri().port();
+            let port;
+            if port_opt.is_none() {
+                port = 443;
+            }else {
+                port  = port_opt.unwrap().into();
+            }
+            let addr = format!("{}:{}",request.uri().host().unwrap(),port);
+            let socket = TcpStream::connect(addr).await.unwrap();
+            rst = tokio_tungstenite::client_async_tls(request, socket).await;
+        }else {
+            rst = tokio_tungstenite::connect_async(request).await;
+        }
+        
         if rst.is_err() {
             log::error!("连接到WS_REV:{ws_url} 失败");
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;

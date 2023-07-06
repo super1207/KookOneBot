@@ -82,7 +82,6 @@ pub async fn check_auth(request: &hyper::Request<hyper::Body>) -> Result<bool, B
     let mut is_pass = false;
     let g_access_token = G_ACCESS_TOKEN.read().await.clone();
     let headers_map = request.headers();
-    println!("headers_map:{headers_map:?}");
     if !g_access_token.is_empty() {
         {
             let access_token:String;

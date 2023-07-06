@@ -48,7 +48,7 @@ reverse_uri：反向http和反向websocket需要这个，若不需要反向http�
 
 反向ws
 
-反向 http
+反向 http (暂时不支持X-Signature)
 
 ## API
 

@@ -1,8 +1,9 @@
-use std::sync::{Arc, atomic::AtomicI64};
+use std::{sync::{Arc, atomic::AtomicI64}, str::FromStr};
 
 use futures_util::{StreamExt, SinkExt};
+use hyper::http::{HeaderValue, HeaderName};
 
-use crate::{G_REVERSE_URL, G_ONEBOT_RX, G_KOOK_TOKEN, G_SELF_ID};
+use crate::{G_REVERSE_URL, G_ONEBOT_RX, G_KOOK_TOKEN, G_SELF_ID, G_ACCESS_TOKEN};
 
 
 // 反向ws
@@ -117,7 +118,16 @@ async fn deal_ws2(url:&str,
 
 async fn onebot_rev_ws(ws_url:String) {
     loop {
-        let rst = tokio_tungstenite::connect_async(ws_url.clone()).await;
+        let mut request = tungstenite::client::IntoClientRequest::into_client_request(ws_url.clone()).unwrap();
+        // 反向ws鉴权
+        let g_access_token = G_ACCESS_TOKEN.read().await.clone();
+        if g_access_token != "" {
+            request.headers_mut().insert("Authorization", HeaderValue::from_str(&format!("Bearer {}",g_access_token)).unwrap());
+        }
+        let self_id = G_SELF_ID.read().await;
+        request.headers_mut().append(HeaderName::from_str("X-Self-ID").unwrap(), HeaderValue::from_str(&self_id.to_string()).unwrap());
+        request.headers_mut().append(HeaderName::from_str("X-Client-Role").unwrap(), HeaderValue::from_str("Universal").unwrap());
+        let rst = tokio_tungstenite::connect_async(request).await;
         if rst.is_err() {
             log::error!("连接到WS_REV:{ws_url} 失败");
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;

@@ -1189,7 +1189,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.5",
+                        "app_version":"0.0.6",
                         "protocol_version":"v11"
                     },
                     "echo":echo

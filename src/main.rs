@@ -35,7 +35,7 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
     let is_pass = onebot_http::check_auth(&request).await?;
 
     if is_pass == false {
-        log::error!("WS鉴权失败!");
+        log::error!("WS或HTTP鉴权失败!");
         let mut res = hyper::Response::new(hyper::Body::from(vec![]));
         *res.status_mut() = hyper::StatusCode::NOT_FOUND;
         return Ok(res);
@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .init();
 
 
-    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.5");
+    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.6");
 
     log::warn!("开源地址:https://github.com/super1207/KookOneBot");
 

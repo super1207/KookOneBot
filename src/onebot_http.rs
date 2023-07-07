@@ -84,7 +84,7 @@ pub async fn check_auth(request: &hyper::Request<hyper::Body>) -> Result<bool, B
     let headers_map = request.headers();
     if !g_access_token.is_empty() {
         {
-            let access_token:String;
+            let access_token:String; 
             if let Some(token) = headers_map.get("Authorization") {
                 access_token = token.to_str()?.to_owned();
             }

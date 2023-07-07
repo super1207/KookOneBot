@@ -22,7 +22,8 @@ config.json 例子：
 	"reverse_uri": [
 				"http://127.0.0.1:55001/OlivOSMsgApi/pp/onebot/default",
                         	"ws://127.0.0.1:5555/some"
-			]
+			],
+	"secret":""
 }
 ```
 
@@ -34,9 +35,11 @@ web_host：正向http和正向websocket需要这个，若想要外网访问，�
 
 kook_token：kook的token，请到此处去获得：[KOOK 开发者中心 - 机器人 (kookapp.cn)](https://developer.kookapp.cn/app/index)
 
-access_token：正向http和正向websocket需要，若不需要访问密码，填`""`即可。
+access_token：正向http、正向websocket、反向websocket需要，若不需要访问密码，填`""`即可。
 
 reverse_uri：反向http和反向websocket需要这个，若不需要反向http或反向ws，填`[]`即可。
+
+secret：反向http需要的HMAC签名，用来验证上报的数据确实来自OneBot，若不需要，填`""`即可。
 
 **注意：所有的字段都是必填的，不可省略！！！**
 
@@ -48,7 +51,7 @@ reverse_uri：反向http和反向websocket需要这个，若不需要反向http�
 
 反向ws
 
-反向 http (暂时不支持X-Signature)
+反向 http
 
 ## API
 

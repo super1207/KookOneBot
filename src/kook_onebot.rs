@@ -19,17 +19,6 @@ pub struct KookOnebot {
 }
 
 impl KookOnebot {
-
-    pub async fn post_to_client(url:&str,json_str:&str,self_id:u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>>{
-        let uri = reqwest::Url::from_str(url)?;
-        let client = reqwest::Client::builder().danger_accept_invalid_certs(true).no_proxy().build()?;
-        let mut req = client.post(uri).body(reqwest::Body::from(json_str.to_owned())).build()?;
-        req.headers_mut().append(HeaderName::from_str("Content-type")?, HeaderValue::from_str("application/json")?);
-        req.headers_mut().append(HeaderName::from_str("X-Self-ID")?, HeaderValue::from_str(&self_id.to_string())?);
-        client.execute(req).await?;
-        Ok(())
-    }
-
     async fn send_to_onebot_client(&self,json_str:&str) {
         log::info!("发送ONEBOT事件:{json_str}");
         {
@@ -50,7 +39,7 @@ impl KookOnebot {
             let json_str_t = json_str.to_owned();
             let self_id_t = self.self_id;
             tokio::spawn(async move{
-                let rst = Self::post_to_client(&uri_t,&json_str_t,self_id_t).await;
+                let rst = crate::onebot_http_rev::post_to_client(&uri_t,&json_str_t,self_id_t).await;
                 if rst.is_err() {
                     log::error!("发送事件到ONEBOT_HTTP客户端出错:`{}`",rst.err().unwrap());
                 }
@@ -1189,7 +1178,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.6",
+                        "app_version":"0.0.7",
                         "protocol_version":"v11"
                     },
                     "echo":echo

@@ -17,6 +17,7 @@ lazy_static! {
     pub static ref G_KOOK_TOKEN:RwLock<String> = RwLock::new(String::new());
     pub static ref G_ONEBOT_RX:RwLock<HashMap<String,(tokio::sync::mpsc::Sender<String>,String)>> = RwLock::new(HashMap::new());
     pub static ref G_ACCESS_TOKEN:RwLock<String> = RwLock::new(String::new());
+    pub static ref G_SECERT:RwLock<String> = RwLock::new(String::new());
     pub static ref  G_REVERSE_URL:RwLock<Vec<String>> = RwLock::new(Vec::new());
 }
 
@@ -71,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .init();
 
 
-    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.6");
+    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.7");
 
     log::warn!("开源地址:https://github.com/super1207/KookOneBot");
 
@@ -79,11 +80,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let config_file = read_config().await.unwrap();
 
-    let kook_token = config_file.get("kook_token").unwrap().as_str().unwrap();
-    let mut web_host = config_file.get("web_host").unwrap().as_str().unwrap();
-    let web_port = config_file.get("web_port").unwrap().as_u64().unwrap();
-    let access_token = config_file.get("access_token").unwrap().as_str().unwrap();
-    let reverse_url = config_file.get("reverse_uri").unwrap().as_array().unwrap();
+    let kook_token = config_file.get("kook_token").expect("配置文件缺少 kook_token 字段").as_str().unwrap();
+    let mut web_host = config_file.get("web_host").expect("配置文件缺少 web_host 字段").as_str().unwrap();
+    let web_port = config_file.get("web_port").expect("配置文件缺少 web_port 字段").as_u64().unwrap();
+    let secret = config_file.get("secret").expect("配置文件缺少 secret 字段").as_str().unwrap();
+    let access_token = config_file.get("access_token").expect("配置文件缺少 access_token 字段").as_str().unwrap();
+    let reverse_url = config_file.get("reverse_uri").expect("配置文件缺少 reverse_uri 字段").as_array().unwrap();
+
     for url in reverse_url {
         let url_str = url.as_str().unwrap();
         G_REVERSE_URL.write().await.push(url_str.to_owned());
@@ -94,6 +97,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     *G_ACCESS_TOKEN.write().await = access_token.to_owned();
+
+    *G_SECERT.write().await = secret.to_owned();
 
 
     log::warn!("加载配置文件成功");

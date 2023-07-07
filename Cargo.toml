@@ -29,3 +29,6 @@ log = "0.4.17"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter","time","local-time"]}
 time = { version = "0.3", features = ["formatting", "macros"] }
+hmac = "0.12.1"
+sha1 = "0.10.5"
+hex = "0.4.3"

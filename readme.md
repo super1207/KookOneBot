@@ -228,3 +228,20 @@ busid 始终为0，也没啥用
 群禁言（kook的权限机制不好实现这个）
 
 加群邀请（bot被邀请就会自己同意）
+
+## 自行编译
+
+注意，通常情况下，如果您不打算参与此项目的开发，就无需自行编译，请直接到release(或者github action)中去下载。
+
+- 安装好[rust编译环境](https://www.rust-lang.org/)。
+
+- 在windows下(powershell)：
+
+```powershell
+$ENV:RUSTFLAGS='-C target-feature=+crt-static';cargo run --target=i686-pc-windows-msvc --release
+```
+- 在linux下：
+```bash
+cargo install cross --git https://github.com/cross-rs/cross
+cross build --target i686-unknown-linux-musl --release
+```

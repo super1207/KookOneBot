@@ -240,7 +240,7 @@ busid 始终为0，也没啥用
 ```powershell
 $ENV:RUSTFLAGS='-C target-feature=+crt-static';cargo run --target=i686-pc-windows-msvc --release
 ```
-- 在linux下：
+- 在linux下(需要先[安装docker](https://docs.docker.com/engine/install/))：
 ```bash
 cargo install cross --git https://github.com/cross-rs/cross
 cross build --target i686-unknown-linux-musl --release

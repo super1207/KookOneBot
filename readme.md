@@ -73,11 +73,11 @@ secret：反向http需要的HMAC签名，用来验证上报的数据确实来自
 
 #### get_group_info 获取群信息
 
-成员数和最大成员数为0，因为kook没有返回这个信息
+成员数和最大成员数暂时为0，待研究。
 
 #### get_group_list 获取群列表
 
-成员数和最大成员数为0，因为kook没有返回这个信息
+成员数和最大成员数暂时为0，待研究。
 
 #### get_group_member_info 获取群成员信息
 
@@ -126,12 +126,11 @@ get_msg 获取消息(可能需要数据库支持才行)
 
 set_group_add_request 处理加群请求
 
+get_group_member_list 获取群成员列表(kook支持几十万人，实现方法有待研究)
 
 ### 不实现
 
 send_like 发送好友赞(kook没有这个)
-
-get_group_member_list 获取群成员列表(kook支持几十万人，没法实现这个)
 
 get_group_honor_info 获取群荣誉信息(kook没有群荣誉)
 

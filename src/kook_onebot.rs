@@ -479,15 +479,15 @@ impl KookOnebot {
             loop {
                 let mut remove_index = 0;
                 for it in &*lk {
-                    remove_index += 1;
                     if tm - it.3 > 60 {
                         break;
                     }
+                    remove_index += 1;
                 }
                 if remove_index == lk.len() {
                     break;
                 }
-                lk.remove(remove_index - 1);
+                lk.remove(remove_index);
             }
             
             for it in &*lk {

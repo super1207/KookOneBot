@@ -82,8 +82,8 @@ impl KookOnebot {
         Ok(ret.to_owned())
     }
 
-    #[allow(dead_code)]
-    async fn get_group_list(&self)-> Result<Vec<GroupInfo>, Box<dyn std::error::Error + Send + Sync>> {
+    
+    async fn get_group_list(&self) -> Result<Vec<GroupInfo>, Box<dyn std::error::Error + Send + Sync>> {
         let ret_json = self.http_get_json("/guild/list").await?;
         let guild_arr = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
         let mut guild_arr_t = vec![];
@@ -92,6 +92,17 @@ impl KookOnebot {
             let id = it.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
             guild_arr_t.push(id.to_string());
         }
+        // 查询分页数据
+        let meta = ret_json.get("meta").ok_or("meta not found")?;
+        let page_total = meta.get("page_total").ok_or("page_total not found")?.as_i64().ok_or("page_total not i32")?;
+        for page in 1..page_total{
+            let guild_list = self.http_get_json(&format!("/guild/list?page={page}")).await?;
+            for it in guild_list.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
+                let id = it.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
+                guild_arr_t.push(id.to_string());
+            }
+        }
+
         for it in guild_arr_t {
             let ret_json = self.http_get_json(&format!("/channel/list?guild_id={it}")).await?;
             let channel_arr = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
@@ -116,7 +127,86 @@ impl KookOnebot {
         Ok(ret_arr)
     }
 
-    #[allow(dead_code)]
+    async fn get_group_member_list(&self,group_id:&str) -> Result<Vec<GroupMemberInfo>, Box<dyn std::error::Error + Send + Sync>> {
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
+        let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
+        let mut ret_vec:Vec<GroupMemberInfo> = vec![];
+        let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}")).await?;
+        let items = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
+        for it in items {
+            let role;
+            let is_master = it.get("is_master").ok_or("get is_master err")?.as_bool().ok_or("is_master not bool")?;
+            if is_master {
+                role = "owner";
+            }else{
+                let roles = it.get("roles").ok_or("get roles err")?.as_array().ok_or("roles not arr")?;
+                if roles.len() != 0 { 
+                    role = "admin";
+                } else {
+                    role = "member";
+                }
+            }
+            let user_id = get_json_str(it, "id");
+            let info = GroupMemberInfo {
+                group_id:group_id.parse::<u64>()?,
+                user_id:user_id.parse::<u64>()?,
+                nickname:it.get("username").ok_or("get username err")?.as_str().ok_or("username not str")?.to_owned(),
+                card:it.get("nickname").ok_or("get nickname err")?.as_str().ok_or("nickname not str")?.to_owned(),
+                sex:"unknown".to_owned(),
+                age:0,
+                area:"".to_owned(),
+                join_time:(it.get("joined_at").ok_or("get joined_at err")?.as_u64().ok_or("joined_at not u64")? / 1000) as i32,
+                last_sent_time:(it.get("active_time").ok_or("get active_time err")?.as_u64().ok_or("active_time not u64")? / 1000) as i32,
+                level:"".to_owned(),
+                role:role.to_owned(),
+                unfriendly:false,
+                title:"".to_owned(),
+                title_expire_time:0,
+                card_changeable:false
+            };
+            ret_vec.push(info);
+        }
+        let meta = ret_json.get("meta").ok_or("meta not found")?;
+        let page_total = meta.get("page_total").ok_or("page_total not found")?.as_i64().ok_or("page_total not i32")?;
+        for page in 1..page_total {
+            let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}&page={page}")).await?;
+            for it in ret_json.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
+                let role;
+                let is_master = it.get("is_master").ok_or("get is_master err")?.as_bool().ok_or("is_master not bool")?;
+                if is_master {
+                    role = "owner";
+                }else{
+                    let roles = it.get("roles").ok_or("get roles err")?.as_array().ok_or("roles not arr")?;
+                    if roles.len() != 0 { 
+                        role = "admin";
+                    } else {
+                        role = "member";
+                    }
+                }
+                let user_id = get_json_str(it, "id");
+                let info = GroupMemberInfo {
+                    group_id:group_id.parse::<u64>()?,
+                    user_id:user_id.parse::<u64>()?,
+                    nickname:it.get("username").ok_or("get username err")?.as_str().ok_or("username not str")?.to_owned(),
+                    card:it.get("nickname").ok_or("get nickname err")?.as_str().ok_or("nickname not str")?.to_owned(),
+                    sex:"unknown".to_owned(),
+                    age:0,
+                    area:"".to_owned(),
+                    join_time:(it.get("joined_at").ok_or("get joined_at err")?.as_u64().ok_or("joined_at not u64")? / 1000) as i32,
+                    last_sent_time:(it.get("active_time").ok_or("get active_time err")?.as_u64().ok_or("active_time not u64")? / 1000) as i32,
+                    level:"".to_owned(),
+                    role:role.to_owned(),
+                    unfriendly:false,
+                    title:"".to_owned(),
+                    title_expire_time:0,
+                    card_changeable:false
+                };
+                ret_vec.push(info);
+            }
+        }
+        Ok(ret_vec)
+    }
+
     async fn get_channel_list(&self,guild_id:&str)-> Result<Vec<GroupInfo>, Box<dyn std::error::Error + Send + Sync>> {
         let mut ret_arr = vec![];
         let ret_json = self.http_get_json(&format!("/channel/list?guild_id={guild_id}")).await?;
@@ -141,7 +231,6 @@ impl KookOnebot {
         Ok(ret_arr)
     }
 
-    #[allow(dead_code)]
     pub async fn get_login_info(&self)-> Result<LoginInfo, Box<dyn std::error::Error + Send + Sync>> {
         let login_info = self.http_get_json("/user/me").await?;
         let user_id = login_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
@@ -175,7 +264,7 @@ impl KookOnebot {
         return Ok(retbin);
     }
 
-    #[allow(dead_code)]
+    
     pub async fn upload_image(&self,uri:&str)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let file_bin;
         if uri.starts_with("http") {
@@ -206,7 +295,7 @@ impl KookOnebot {
         Ok(ret.to_owned())
     }
 
-    #[allow(dead_code)]
+    
     async fn get_stranger_info(&self,user_id:&str)-> Result<StrangerInfo, Box<dyn std::error::Error + Send + Sync>> {
         let stranger_info = self.http_get_json(&format!("/user/view?user_id={user_id}")).await?;
         let user_id = stranger_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
@@ -219,7 +308,7 @@ impl KookOnebot {
         })
     }
 
-    #[allow(dead_code)]
+    
     async fn get_group_info(&self,group_id:&str)-> Result<GroupInfo, Box<dyn std::error::Error + Send + Sync>> {
         let stranger_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
         let group_id = stranger_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
@@ -238,7 +327,7 @@ impl KookOnebot {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    
     async fn get_group_member_info(&self,group_id:&str,user_id:&str)-> Result<GroupMemberInfo, Box<dyn std::error::Error + Send + Sync>> {
         let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
@@ -275,7 +364,7 @@ impl KookOnebot {
         })
     }
 
-    #[allow(dead_code)]
+    
     async fn set_group_kick(&self,group_id:&str,user_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
@@ -353,7 +442,7 @@ impl KookOnebot {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    
     async fn send_group_msg(&self,tp:i32,group_id:&str,message:&str,quote:&str)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["content"] = message.into();
@@ -367,7 +456,7 @@ impl KookOnebot {
         Ok(msg_id.to_owned())
     }
 
-    #[allow(dead_code)]
+    
     async fn send_private_msg(&self,tp:i32,user_id:&str,message:&str,quote:&str)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["content"] = message.into();
@@ -1088,6 +1177,18 @@ impl KookOnebot {
         Ok(send_json)
     }
 
+    async fn deal_ob_get_group_member_list(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let group_id = get_json_str(params,"group_id");
+        let info = self.get_group_member_list(&group_id).await?;
+        let send_json = serde_json::json!({
+            "status":"ok",
+            "retcode":0,
+            "data": info,
+            "echo":echo
+        });
+        Ok(send_json)
+    }
+
     // 这个函数处理onebot的api调用
     pub async fn deal_onebot(&self,_uid:&str,text:&str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let js:serde_json::Value = serde_json::from_str(&text)?;
@@ -1144,6 +1245,9 @@ impl KookOnebot {
             }
             "get_friend_list" => {
                 self.deal_ob_get_friend_list(&params,&js,&echo).await?
+            },
+            "get_group_member_list" => {
+                self.deal_ob_get_group_member_list(&params,&js,&echo).await?
             }
             "can_send_image" => {
                 serde_json::json!({
@@ -1218,7 +1322,7 @@ fn get_json_str(js:&serde_json::Value,key:&str) -> String {
     return "".to_owned();
 }
 
-#[allow(dead_code)]
+
 #[derive(Serialize, Deserialize, Debug)]
 struct GroupInfo {
     group_id:u64,
@@ -1227,14 +1331,14 @@ struct GroupInfo {
     max_member_count:i32
 }
 
-#[allow(dead_code)]
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoginInfo {
     pub user_id:u64,
     pub nickname:String
 }
 
-#[allow(dead_code)]
+
 #[derive(Serialize, Deserialize, Debug)]
 struct StrangerInfo {
     user_id:u64,
@@ -1243,7 +1347,7 @@ struct StrangerInfo {
     age:i32
 }
 
-#[allow(dead_code)]
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct FriendInfo {
     user_id:u64,
@@ -1251,7 +1355,7 @@ pub struct FriendInfo {
     remark:String,
 }
 
-#[allow(dead_code)]
+
 #[derive(Serialize, Deserialize, Debug,Clone)]
 struct GroupMemberInfo {
     group_id:u64,

@@ -960,6 +960,30 @@ impl KookOnebot {
                 let kook_id = crate::msgid_tool::get_msg_id(cq_id.parse::<i32>()?);
                 quote = kook_id.raw_ids.get(0).unwrap_or(&String::new()).to_owned();
             }
+            else if tp == "music"{
+                let music_type = it.get("data").ok_or("data not found")?.get("type").ok_or("type not found")?.as_str().ok_or("type not str")?;
+                if music_type != "custom" {
+                    continue;
+                }
+                let data = it.get("data").ok_or("data not found")?;
+                let audio = get_json_str(data, "audio");
+                let title = get_json_str(data, "title");
+                let image = get_json_str(data, "image");
+                let js = serde_json::json!([{
+                        "type": "card",
+                        "theme": "secondary",
+                        "size": "lg",
+                        "modules": [
+                        {
+                            "type": "audio",
+                            "title": title,
+                            "src": audio,
+                            "cover": image
+                        }]
+                }]);
+                to_send_data.push((10,js.to_string()));
+                last_type = 10;
+            }
             else {
                 let j = serde_json::json!([it]);
                 let s = arr_to_cq_str(&j)?;

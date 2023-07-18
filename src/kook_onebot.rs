@@ -966,7 +966,10 @@ impl KookOnebot {
                     continue;
                 }
                 let data = it.get("data").ok_or("data not found")?;
-                let audio = get_json_str(data, "audio");
+                let mut audio = get_json_str(data, "audio");
+                if audio == "" {
+                    audio = get_json_str(data, "voice");
+                }
                 let title = get_json_str(data, "title");
                 let image = get_json_str(data, "image");
                 let js = serde_json::json!([{

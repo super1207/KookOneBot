@@ -6,7 +6,7 @@
 
 我们为此项目创建了一个KOOK群，欢迎来玩，邀请链接：https://kook.top/3SEwQj
 
-[红色问答](https://github.com/super1207/redreply)、[MiraiCQ](https://github.com/super1207/redreply) 与此项目配合更佳，欢迎加入为它们创建的QQ群：920220179、556515826
+[红色问答](https://github.com/super1207/redreply)、[MiraiCQ](https://github.com/super1207/MiraiCQ) 与此项目配合更佳，欢迎加入为它们创建的QQ群：920220179、556515826
 
 
 ## 配置文件

@@ -5,6 +5,7 @@ use std::{str::FromStr, io::Read, collections::{HashMap, VecDeque}, time::Durati
 use flate2::read::ZlibDecoder;
 use futures_util::{StreamExt, SinkExt};
 use hyper::http::{HeaderName, HeaderValue};
+use regex::Regex;
 use serde_derive::{Serialize, Deserialize};
 use tokio_tungstenite::connect_async;
 use std::time::SystemTime;
@@ -962,17 +963,41 @@ impl KookOnebot {
             }
             else if tp == "music"{
                 let music_type = it.get("data").ok_or("data not found")?.get("type").ok_or("type not found")?.as_str().ok_or("type not str")?;
-                if music_type != "custom" {
-                    continue;
-                }
-                let data = it.get("data").ok_or("data not found")?;
-                let mut audio = get_json_str(data, "audio");
-                if audio == "" {
-                    audio = get_json_str(data, "voice");
-                }
-                let title = get_json_str(data, "title");
-                let image = get_json_str(data, "image");
-                let js = serde_json::json!([{
+                if music_type == "custom" {
+                    let data = it.get("data").ok_or("data not found")?;
+                    let mut audio = get_json_str(data, "audio");
+                    if audio == "" {
+                        audio = get_json_str(data, "voice");
+                    }
+                    let title = get_json_str(data, "title");
+                    let image = get_json_str(data, "image");
+                    let js = serde_json::json!([{
+                            "type": "card",
+                            "theme": "secondary",
+                            "size": "lg",
+                            "modules": [
+                            {
+                                "type": "audio",
+                                "title": title,
+                                "src": audio,
+                                "cover": image
+                            }]
+                    }]);
+                    to_send_data.push((10,js.to_string()));
+                    last_type = 10;
+                }else if music_type == "163" {
+                    let data = it.get("data").ok_or("data not found")?;
+                    let id = get_json_str(data, "id");
+                    let url = format!("https://api.gumengya.com/Api/Netease?format=json&id={id}");
+                    let mut header: HashMap<String, String> = HashMap::new();
+                    header.insert("User-Agent".to_owned(), "https://github.com/super1207/KookOneBot".to_owned());
+                    let ret = Self::http_post(&url,vec![],&header,false).await?;
+                    let ret_json:serde_json::Value = serde_json::from_str(&String::from_utf8(ret)?)?;
+                    let music_data = ret_json.get("data").ok_or("data not found")?;
+                    let audio = get_json_str(music_data, "url");
+                    let title = get_json_str(music_data, "title");
+                    let image = get_json_str(music_data, "pic");
+                    let js = serde_json::json!([{
                         "type": "card",
                         "theme": "secondary",
                         "size": "lg",
@@ -983,9 +1008,42 @@ impl KookOnebot {
                             "src": audio,
                             "cover": image
                         }]
-                }]);
-                to_send_data.push((10,js.to_string()));
-                last_type = 10;
+                    }]);
+                    to_send_data.push((10,js.to_string()));
+                    last_type = 10;
+                }else if music_type == "qq" {
+                    let data = it.get("data").ok_or("data not found")?;
+                    let id = get_json_str(data, "id");
+                    let url = format!("https://api.gumengya.com/Api/Tencent?format=json&id={id}");
+                    let mut header: HashMap<String, String> = HashMap::new();
+                    header.insert("User-Agent".to_owned(), "https://github.com/super1207/KookOneBot".to_owned());
+                    let ret = Self::http_post(&url,vec![],&header,false).await?;
+                    let ret_json:serde_json::Value = serde_json::from_str(&String::from_utf8(ret)?)?;
+                    let music_data = ret_json.get("data").ok_or("data not found")?;
+                    let mut audio = get_json_str(music_data, "url");
+                    lazy_static! {
+                        static ref AT_REGEX : Regex = Regex::new(
+                            r"://(.+)/amobile"
+                            ).unwrap();
+                    }
+                    audio = AT_REGEX.replace_all(&audio, "://aqqmusic.tc.qq.com/amobile").to_string();
+                    let title = get_json_str(music_data, "title");
+                    let image = get_json_str(music_data, "pic");
+                    let js = serde_json::json!([{
+                        "type": "card",
+                        "theme": "secondary",
+                        "size": "lg",
+                        "modules": [
+                        {
+                            "type": "audio",
+                            "title": title,
+                            "src": audio,
+                            "cover": image
+                        }]
+                    }]);
+                    to_send_data.push((10,js.to_string()));
+                    last_type = 10;
+                }
             }
             else {
                 let j = serde_json::json!([it]);
@@ -1309,7 +1367,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.7",
+                        "app_version":"0.0.8",
                         "protocol_version":"v11"
                     },
                     "echo":echo

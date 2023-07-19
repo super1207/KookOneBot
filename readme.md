@@ -59,11 +59,11 @@ secret：反向http需要的HMAC签名，用来验证上报的数据确实来自
 
 #### send_group_msg 发送群消息
 
-目前支持文字、图片、at、回复、自定义音乐分享
+目前支持文字、图片、at、回复、自定义音乐分享、qq/网易云音乐分享(使用[故梦api](https://blog.gumengya.com/api.html))
 
 #### send_private_msg 发送私聊消息
 
-目前支持文字、图片、回复、自定义音乐分享
+目前支持文字、图片、回复、自定义音乐分享、qq/网易云音乐分享(使用[故梦api](https://blog.gumengya.com/api.html))
 
 #### get_login_info 获取登录号信息
 

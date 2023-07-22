@@ -83,7 +83,7 @@ secret：反向http需要的HMAC签名，用来验证上报的数据确实来自
 
 成员信息尽力提供，服务器拥有者，被认为是owner，若有加入某角色，被认为是admin，否则被认为是member。
 
-### get_group_member_list 获取群成员列表
+#### get_group_member_list 获取群成员列表
 
 成员信息尽力提供，服务器拥有者，被认为是owner，若有加入某角色，被认为是admin，否则被认为是member。
 

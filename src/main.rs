@@ -27,7 +27,7 @@ use kook_onebot::KookOnebot;
 use time::UtcOffset;
 use ::time::format_description;
 use tokio::sync::RwLock;
-use hyper::{service::make_service_fn};
+use hyper::service::make_service_fn;
 use crate::config_tool::read_config;
 
 
@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     )).with_max_level(tracing::Level::INFO)
     .init();
 
-    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.8");
+    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.9");
 
     log::warn!("开源地址:https://github.com/super1207/KookOneBot");
 

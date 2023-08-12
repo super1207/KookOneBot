@@ -266,7 +266,7 @@ impl KookOnebot {
     }
 
     
-    pub async fn upload_image(&self,uri:&str)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    async fn upload_asset(&self,uri:&str)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let file_bin;
         if uri.starts_with("http") {
             file_bin = Self::http_post(uri,vec![],&HashMap::new(),false).await?;
@@ -657,6 +657,37 @@ impl KookOnebot {
         return Ok(false);
     }
 
+
+    async fn deal_audio_msg(&self,data:&serde_json::Value,msg:&mut String) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+
+        let message = data.get("content").ok_or("content not found")?.as_str().ok_or("content not str")?.to_owned();
+        let err = "get file err";
+        let js_arr:serde_json::Value = serde_json::from_str(&message)?;
+        let card_arr = js_arr.as_array().ok_or(err)?;
+        if card_arr.len() != 1 {
+            return Ok(false);
+        }
+
+        let md_arr = card_arr.get(0).unwrap().get("modules").ok_or(err)?.as_array().ok_or(err)?;
+        if md_arr.len() != 1 {
+            return Ok(false);
+        }
+        let obj = md_arr.get(0).unwrap();
+        let tp = obj.get("type").ok_or(err)?.as_str().ok_or(err)?;
+        if tp != "audio" {
+            return Ok(false);
+        }
+        if get_json_str(obj, "title") != "" && get_json_str(obj, "cover") != "" {
+            // 说明是音乐分享，不是语音
+            return  Ok(true);
+        }
+        let url = obj.get("src").ok_or(err)?.as_str().ok_or(err)?;
+        let url_t = crate::cqtool::cq_params_encode(url);
+        msg.push_str(&format!("[CQ:record,file={},url={}]",url_t,url_t));
+        return  Ok(true);
+        
+    }
+
     async fn deal_group_message_event(&self,data:&serde_json::Value,user_id:u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let group_id_str = data.get("target_id").ok_or("target_id not found")?.as_str().ok_or("target_id not str")?;
         let group_id = group_id_str.parse::<u64>()?;
@@ -668,27 +699,39 @@ impl KookOnebot {
         // 获取消息类型
         let msg_type = data.get("type").ok_or("type not found")?.as_i64().ok_or("type not i64")?;
 
+        let mut msg = String::new();
+
         // 处理卡牌消息
         if msg_type == 10 { // 卡牌消息
             // 处理群文件上传事件
             if self.deal_group_file_upload_event(data,user_id).await? {
                 return Ok(());
             }
+
+            if self.deal_audio_msg(data,&mut msg).await? {
+                // do nothing
+            }
+            else {
+                // 未知的card
+                msg.push_str("卡片消息");
+            }
+        } else {
+            // 处理回复
+            if let Some(quote) = extra.get("quote") {
+                let rong_id = get_json_str(quote, "rong_id");
+                let cq_id = crate::msgid_tool::get_cq_msg_id(&rong_id).0;
+                msg.push_str(&format!("[CQ:reply,id={cq_id}]"));
+            }
+
+            // 转为CQ格式
+            msg.push_str(&kook_msg_to_cq(msg_type,&message)?);
         }
 
-        
-        let mut msg = String::new();
-
-        // 处理回复
-        if let Some(quote) = extra.get("quote") {
-            let rong_id = get_json_str(quote, "rong_id");
-            let cq_id = crate::msgid_tool::get_cq_msg_id(&rong_id).0;
-            msg.push_str(&format!("[CQ:reply,id={cq_id}]"));
+        if msg == "" {
+            return Ok(());
         }
 
-        // 转为CQ格式
-        msg.push_str(&kook_msg_to_cq(msg_type,&message)?);
-
+        // 存msg_id
         let raw_msg_id = data.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
         let msg_id = crate::msgid_tool::add_msg_id(QMessageStruct {raw_ids:vec![raw_msg_id.to_owned()], user_id });
 
@@ -724,20 +767,35 @@ impl KookOnebot {
             remark: username.to_owned(),
         };
 
-        // let message_id_str = data.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
         let msg_type = data.get("type").ok_or("type not found")?.as_i64().ok_or("type not i64")?;
 
         let mut msg = String::new();
 
-        // 处理回复
-        if let Some(quote) = extra.get("quote") {
-            let rong_id = get_json_str(quote, "rong_id");
-            let cq_id = crate::msgid_tool::get_cq_msg_id(&rong_id).0;
-            msg.push_str(&format!("[CQ:reply,id={cq_id}]"));
+        // 处理卡牌消息
+        if msg_type == 10 { // 卡牌消息
+
+            if self.deal_audio_msg(data,&mut msg).await? {
+                // do nothing
+            }
+            else {
+                // 未知的card
+                msg.push_str("卡片消息");
+            }
+        }else {
+            // 处理回复
+            if let Some(quote) = extra.get("quote") {
+                let rong_id = get_json_str(quote, "rong_id");
+                let cq_id = crate::msgid_tool::get_cq_msg_id(&rong_id).0;
+                msg.push_str(&format!("[CQ:reply,id={cq_id}]"));
+            }
+
+            // 转为CQ格式
+            msg.push_str(&kook_msg_to_cq(msg_type,&message)?);
         }
 
-        // 转为CQ格式
-        msg.push_str(&kook_msg_to_cq(msg_type,&message)?);
+        if msg == "" {
+            return Ok(());
+        }
 
         let raw_msg_id = data.get("msg_id").ok_or("msg_id not found")?.as_str().ok_or("msg_id not str")?;
         let msg_id = crate::msgid_tool::add_msg_id(QMessageStruct {raw_ids:vec![raw_msg_id.to_owned()], user_id });
@@ -936,7 +994,7 @@ impl KookOnebot {
                 }
             } else if tp == "image"{
                 let file = it.get("data").ok_or("data not found")?.get("file").ok_or("file not found")?.as_str().ok_or("file not str")?;
-                let file_url = self.upload_image(file).await?;
+                let file_url = self.upload_asset(file).await?;
                 to_send_data.push((2,file_url));
                 last_type = 2;
             }
@@ -1044,6 +1102,23 @@ impl KookOnebot {
                     to_send_data.push((10,js.to_string()));
                     last_type = 10;
                 }
+            }
+            else if tp == "record" {
+                let data = it.get("data").ok_or("data not found")?;
+                let file = get_json_str(data, "file");
+                let url = self.upload_asset(&file).await?;
+                let js = serde_json::json!([{
+                        "type": "card",
+                        "theme": "secondary",
+                        "size": "lg",
+                        "modules": [
+                        {
+                            "type": "audio",
+                            "src": url,
+                        }]
+                }]);
+                to_send_data.push((10,js.to_string()));
+                last_type = 10;
             }
             else {
                 let j = serde_json::json!([it]);
@@ -1367,7 +1442,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.8",
+                        "app_version":"0.0.9",
                         "protocol_version":"v11"
                     },
                     "echo":echo

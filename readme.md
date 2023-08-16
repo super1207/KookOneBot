@@ -31,7 +31,7 @@ config.json 例子：
 
 web_port：正向http和正向websocket需要这个端口号，若不使用正向http和正向websocket，填0即可。
 
-web_host：正向http和正向websocket需要这个，若想要外网访问，填`0.0.0.0`，若不使用正向http和正向websocket，填`""`即可。
+web_host：正向http和正向websocket需要这个，若想要外网访问，填`"0.0.0.0"`，若不使用正向http和正向websocket，填`""`即可。
 
 kook_token：kook的token，请到此处去获得：[KOOK 开发者中心 - 机器人 (kookapp.cn)](https://developer.kookapp.cn/app/index)
 

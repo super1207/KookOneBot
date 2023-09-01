@@ -34,6 +34,7 @@ jobs:
         cross build --target aarch64-unknown-linux-musl --release
         cross build --target i686-unknown-linux-musl --release
         cross build --target armv7-unknown-linux-musleabi --release
+        cross build --target aarch64-linux-android --release
 
     - name: before_upload
       run: |
@@ -42,6 +43,7 @@ jobs:
         cp target/aarch64-unknown-linux-musl/release/kook_onebot Release/kook_onebot_linux_aarch64
         cp target/i686-unknown-linux-musl/release/kook_onebot Release/kook_onebot_linux_i686
         cp target/armv7-unknown-linux-musleabi/release/kook_onebot Release/kook_onebot_linux_armv7
+        cp target/aarch64-linux-android/release/kook_onebot Release/kook_onebot_android_aarch64
 
     - name: upload file1
       uses: actions/upload-artifact@v3
@@ -70,3 +72,10 @@ jobs:
         name: kook_onebot_linux_armv7
         path: 
           Release/kook_onebot_linux_armv7
+          
+    - name: upload file file5
+      uses: actions/upload-artifact@v3
+      with:
+        name: kook_onebot_android_aarch64
+        path: 
+          Release/kook_onebot_android_aarch64

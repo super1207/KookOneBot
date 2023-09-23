@@ -109,7 +109,7 @@ secret：反向http需要的HMAC签名，用来验证上报的数据确实来自
 
 #### can_send_record 检查是否可以发送语音
 
-直接返回不可以
+直接返回可以
 
 #### set_group_name 设置群名
 
@@ -155,7 +155,7 @@ set_group_anonymous_ban 群组匿名用户禁言(kook没有匿名)
 
 set_friend_add_request 处理加好友请求(bot不能被加好友)
 
-get_record 获取语音(kook不支持发送语音，所以也不存在获取语音)
+get_record 获取语音(此api已经过时)
 
 set_group_special_title 设置群组专属头衔(kook没有这个)
 

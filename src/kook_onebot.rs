@@ -1136,13 +1136,32 @@ impl KookOnebot {
         Ok((to_send_data,quote))
     }
 
+    fn get_auto_escape_from_params(&self,params:&serde_json::Value) -> bool {
+        let mut is_auto_escape = false;
+        let auto_escape_opt = params.get("auto_escape");
+        if auto_escape_opt.is_some() {
+            if auto_escape_opt.unwrap().is_boolean() {
+                is_auto_escape = auto_escape_opt.unwrap().as_bool().unwrap();
+            }
+        }
+        return is_auto_escape;
+    }
+
     async fn deal_ob_send_group_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let message_arr:serde_json::Value;
         let message_rst = params.get("message").ok_or("message not found")?;
         
         if message_rst.is_string() {
-            message_arr = str_msg_to_arr(message_rst)?;
+            if self.get_auto_escape_from_params(&params) {
+                message_arr = serde_json::json!(
+                    [{"type":"text","data":{
+                        "text": message_rst.as_str()
+                    }}]
+                );
+            } else {
+                message_arr = str_msg_to_arr(message_rst)?;
+            }
         }else {
             message_arr = params.get("message").ok_or("message not found")?.to_owned();
         }
@@ -1172,9 +1191,17 @@ impl KookOnebot {
         let user_id = get_json_str(params,"user_id");
         let message_arr:serde_json::Value;
         let message_rst = params.get("message").ok_or("message not found")?;
-        
+
         if message_rst.is_string() {
-            message_arr = str_msg_to_arr(message_rst)?;
+            if self.get_auto_escape_from_params(&params) {
+                message_arr = serde_json::json!(
+                    [{"type":"text","data":{
+                        "text": message_rst.as_str()
+                    }}]
+                );
+            } else {
+                message_arr = str_msg_to_arr(message_rst)?;
+            }
         }else {
             message_arr = params.get("message").ok_or("message not found")?.to_owned();
         }
@@ -1442,7 +1469,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.9",
+                        "app_version":"0.0.10",
                         "protocol_version":"v11"
                     },
                     "echo":echo

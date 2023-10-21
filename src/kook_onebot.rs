@@ -163,7 +163,8 @@ impl KookOnebot {
                 unfriendly:false,
                 title:"".to_owned(),
                 title_expire_time:0,
-                card_changeable:false
+                card_changeable:false,
+                avatar:it.get("avatar").ok_or("avatar not found")?.as_str().ok_or("avatar not str")?.to_owned()
             };
             ret_vec.push(info);
         }
@@ -200,7 +201,8 @@ impl KookOnebot {
                     unfriendly:false,
                     title:"".to_owned(),
                     title_expire_time:0,
-                    card_changeable:false
+                    card_changeable:false,
+                    avatar:it.get("avatar").ok_or("avatar not found")?.as_str().ok_or("avatar not str")?.to_owned()
                 };
                 ret_vec.push(info);
             }
@@ -296,7 +298,7 @@ impl KookOnebot {
         Ok(ret.to_owned())
     }
 
-    
+
     async fn get_stranger_info(&self,user_id:&str)-> Result<StrangerInfo, Box<dyn std::error::Error + Send + Sync>> {
         let stranger_info = self.http_get_json(&format!("/user/view?user_id={user_id}")).await?;
         let user_id = stranger_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
@@ -305,7 +307,8 @@ impl KookOnebot {
             user_id:user_id.parse::<u64>()?,
             nickname:nickname.to_owned(),
             sex:"unknown".to_owned(),
-            age:0
+            age:0,
+            avatar:stranger_info.get("avatar").ok_or("avatar not found")?.as_str().ok_or("avatar not str")?.to_owned()
         })
     }
 
@@ -361,7 +364,8 @@ impl KookOnebot {
             unfriendly:false,
             title:"".to_owned(),
             title_expire_time:0,
-            card_changeable:false
+            card_changeable:false,
+            avatar:stranger_info.get("avatar").ok_or("avatar not found")?.as_str().ok_or("avatar not str")?.to_owned()
         })
     }
 
@@ -400,10 +404,12 @@ impl KookOnebot {
             let target_info = it.get("target_info").ok_or("target_info not found")?;
             let id = target_info.get("id").ok_or("id not found")?.as_str().ok_or("id not str")?;
             let username = target_info.get("username").ok_or("username not found")?.as_str().ok_or("username not str")?;
+            let avatar = target_info.get("avatar").ok_or("avatar not found")?.as_str().ok_or("avatar not str")?;
             ret_vec.push(FriendInfo {
                 user_id: id.parse::<u64>()?,
                 nickname: username.to_owned(),
-                remark: username.to_owned()
+                remark: username.to_owned(),
+                avatar: avatar.to_owned()
             });
         }
         let meta = friend_list.get("meta").ok_or("meta not found")?;
@@ -414,10 +420,12 @@ impl KookOnebot {
                 let target_info = it.get("target_info").ok_or("target_info not found")?;
                 let id = target_info.get("id").ok_or("id not found")?.as_str().ok_or("id not str")?;
                 let username = target_info.get("username").ok_or("username not found")?.as_str().ok_or("username not str")?;
+                let avatar = target_info.get("avatar").ok_or("avatar not found")?.as_str().ok_or("avatar not str")?;
                 ret_vec.push(FriendInfo {
                     user_id: id.parse::<u64>()?,
                     nickname: username.to_owned(),
-                    remark: username.to_owned()
+                    remark: username.to_owned(),
+                    avatar: avatar.to_owned()
                 });
             }
         }
@@ -760,11 +768,14 @@ impl KookOnebot {
         let author = extra.get("author").ok_or("author not found")?;
 
         let username = author.get("username").ok_or("username not found")?.as_str().ok_or("username not str")?;
+        
+        let avatar = author.get("avatar").ok_or("avatar not found")?.as_str().ok_or("avatar not str")?;
 
         let sender: FriendInfo = FriendInfo {
             user_id,
             nickname: username.to_owned(),
             remark: username.to_owned(),
+            avatar: avatar.to_owned()
         };
 
         let msg_type = data.get("type").ok_or("type not found")?.as_i64().ok_or("type not i64")?;
@@ -1469,7 +1480,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.10",
+                        "app_version":"0.0.11",
                         "protocol_version":"v11"
                     },
                     "echo":echo
@@ -1531,7 +1542,8 @@ struct StrangerInfo {
     user_id:u64,
     nickname:String,
     sex:String,
-    age:i32
+    age:i32,
+    avatar:String
 }
 
 
@@ -1540,6 +1552,7 @@ pub struct FriendInfo {
     user_id:u64,
     nickname:String,
     remark:String,
+    avatar:String
 }
 
 
@@ -1559,5 +1572,6 @@ struct GroupMemberInfo {
     unfriendly:bool,
     title:String,
     title_expire_time:i32,
-    card_changeable:bool
+    card_changeable:bool,
+    avatar:String
 }

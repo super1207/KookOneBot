@@ -1158,7 +1158,7 @@ impl KookOnebot {
         return is_auto_escape;
     }
 
-    async fn deal_ob_send_group_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_send_group_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let message_arr:serde_json::Value;
         let message_rst = params.get("message").ok_or("message not found")?;
@@ -1198,7 +1198,7 @@ impl KookOnebot {
     }
 
 
-    async fn deal_ob_send_private_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_send_private_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let user_id = get_json_str(params,"user_id");
         let message_arr:serde_json::Value;
         let message_rst = params.get("message").ok_or("message not found")?;
@@ -1237,7 +1237,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_get_login_info(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_get_login_info(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let info: LoginInfo = self.get_login_info().await?;
         let send_json = serde_json::json!({
             "status":"ok",
@@ -1248,7 +1248,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_get_stranger_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_get_stranger_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let user_id = get_json_str(params,"user_id");
         let info = self.get_stranger_info(&user_id).await?;
         let send_json = serde_json::json!({
@@ -1260,7 +1260,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_get_group_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_get_group_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let info = self.get_group_info(&group_id).await?;
         let send_json = serde_json::json!({
@@ -1272,7 +1272,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_get_group_list(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_get_group_list(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let info = self.get_group_list().await?;
         let send_json = serde_json::json!({
             "status":"ok",
@@ -1284,7 +1284,7 @@ impl KookOnebot {
     }
 
     
-    async fn deal_ob_get_group_member_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_get_group_member_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let user_id = get_json_str(params,"user_id");
         let info = self.get_group_member_info(&group_id, &user_id).await?;
@@ -1297,7 +1297,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_set_group_kick(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_set_group_kick(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let user_id = get_json_str(params,"user_id");
         self.set_group_kick(&group_id, &user_id).await?;
@@ -1310,7 +1310,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_delete_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_delete_msg(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let msg_id = get_json_str(params,"message_id").parse::<i32>()?;
         let msg_ids = crate::msgid_tool::get_msg_id(msg_id);
         for it in msg_ids.raw_ids {
@@ -1325,7 +1325,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_set_group_leave(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_set_group_leave(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         self.set_group_leave(&group_id).await?;
         let send_json = serde_json::json!({
@@ -1337,7 +1337,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_set_group_name(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_set_group_name(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let group_name = get_json_str(params,"group_name");
         self.set_group_name(&group_id,&group_name).await?;
@@ -1350,7 +1350,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_set_group_card(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_set_group_card(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let user_id = get_json_str(params,"user_id");
         let card = get_json_str(params,"card");
@@ -1364,7 +1364,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_get_friend_list(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_get_friend_list(&self,_params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let info = self.get_friend_list().await?;
         let send_json = serde_json::json!({
             "status":"ok",
@@ -1375,7 +1375,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_ob_get_group_member_list(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_ob_get_group_member_list(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let info = self.get_group_member_list(&group_id).await?;
         let send_json = serde_json::json!({
@@ -1392,8 +1392,9 @@ impl KookOnebot {
         let js:serde_json::Value = serde_json::from_str(&text)?;
         let action = js.get("action").ok_or("action not found")?.as_str().ok_or("action not str")?;
         let def = serde_json::json!({});
+        let def_str = serde_json::json!("");
         let params = js.get("params").unwrap_or(&def);
-        let echo = get_json_str(&js,"echo");
+        let echo = js.get("echo").unwrap_or(&def_str);
         let send_json;
         log::info!("收到来自onebot的动作:{text}");
         send_json = match action {

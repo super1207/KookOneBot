@@ -44,6 +44,19 @@ pub fn cq_params_encode(data:&str) -> String {
     return ret_str;
 }
 
+pub fn to_json_str(val:&serde_json::Value) -> String {
+    if val.is_i64() {
+        return val.as_i64().unwrap().to_string();
+    }
+    if val.is_u64() {
+        return val.as_u64().unwrap().to_string();
+    }
+    if val.is_string() {
+        return val.as_str().unwrap().to_string();
+    }
+    return "".to_owned();
+}
+
 pub fn arr_to_cq_str(msg_json: & serde_json::Value) -> Result<String, Box<dyn std::error::Error + Send + Sync>>  {
     let mut ret:String = String::new();
     if msg_json.is_string() {
@@ -60,10 +73,10 @@ pub fn arr_to_cq_str(msg_json: & serde_json::Value) -> Result<String, Box<dyn st
             if nodes.is_object() {
                 for j in nodes.as_object().ok_or("msg nodes 不是object")? {
                     let k = j.0;
-                    let v = j.1.as_str().ok_or("j.1.as_str() err")?;
+                    let v = to_json_str(j.1);
                     cqcode.push_str(k);
                     cqcode.push('=');
-                    cqcode.push_str(cq_params_encode(v).as_str());
+                    cqcode.push_str(cq_params_encode(&v).as_str());
                     cqcode.push(',');    
                 }
             }

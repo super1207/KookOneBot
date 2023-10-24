@@ -9,7 +9,7 @@ use regex::Regex;
 use serde_derive::{Serialize, Deserialize};
 use tokio_tungstenite::connect_async;
 use std::time::SystemTime;
-use crate::{G_ONEBOT_RX, cqtool::{str_msg_to_arr, arr_to_cq_str, make_kook_text, kook_msg_to_cq}, msgid_tool::QMessageStruct, G_REVERSE_URL};
+use crate::{G_ONEBOT_RX, cqtool::{str_msg_to_arr, arr_to_cq_str, make_kook_text, kook_msg_to_cq, to_json_str}, msgid_tool::QMessageStruct, G_REVERSE_URL};
 
 
 #[derive(Clone)]
@@ -49,7 +49,8 @@ impl KookOnebot {
         
     }
 
-    async fn http_get_json(&self,uri:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn http_get_json_t(&self,uri:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         log::info!("发送KOOK_GET:{uri}");
         let uri = reqwest::Url::from_str(&format!("https://www.kookapp.cn/api/v3{uri}"))?;
         let client = reqwest::Client::builder().danger_accept_invalid_certs(true).no_proxy().build()?;
@@ -63,6 +64,48 @@ impl KookOnebot {
         let js:serde_json::Value = serde_json::from_str(&ret_str)?;
         let ret = js.get("data").ok_or("get data err")?;
         Ok(ret.to_owned())
+    }
+
+    async fn http_get_json(&self,uri:&str,use_cache:bool) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        lazy_static! {
+            static ref CACHE : std::sync::RwLock<VecDeque<(String,serde_json::Value,u64)>>  = std::sync::RwLock::new(VecDeque::from([]));
+        }
+        let tm = SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
+        // 清除久远的记录
+        {
+            let mut lk = CACHE.write().unwrap();
+            loop {
+                let mut remove_index = 0;
+                for it in &*lk {
+                    if tm - it.2 > 60 {
+                        break;
+                    }
+                    remove_index += 1;
+                }
+                if remove_index == lk.len() {
+                    break;
+                }
+                lk.remove(remove_index);
+            }
+        }
+        // 从缓存中返回数据
+        if use_cache {
+            let lk = CACHE.write().unwrap();
+            for it in &*lk {
+                if it.0 ==uri {
+                    return Ok(it.1.clone());
+                }
+            }
+        }
+        // 缓存失效或者不使用缓存
+        let ret_val = self.http_get_json_t(uri).await?;
+        // 更新缓存
+        {
+            let mut lk = CACHE.write().unwrap();
+            lk.push_back((uri.to_string(),ret_val.clone(),tm));
+        }
+        return Ok(ret_val)
+
     }
 
     async fn http_post_json(&self,uri:&str,json:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>>{
@@ -85,7 +128,7 @@ impl KookOnebot {
 
     
     async fn get_group_list(&self) -> Result<Vec<GroupInfo>, Box<dyn std::error::Error + Send + Sync>> {
-        let ret_json = self.http_get_json("/guild/list").await?;
+        let ret_json = self.http_get_json("/guild/list",false).await?;
         let guild_arr = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
         let mut guild_arr_t = vec![];
         let mut ret_arr = vec![];
@@ -97,7 +140,7 @@ impl KookOnebot {
         let meta = ret_json.get("meta").ok_or("meta not found")?;
         let page_total = meta.get("page_total").ok_or("page_total not found")?.as_i64().ok_or("page_total not i32")?;
         for page in 1..page_total{
-            let guild_list = self.http_get_json(&format!("/guild/list?page={page}")).await?;
+            let guild_list = self.http_get_json(&format!("/guild/list?page={page}"),false).await?;
             for it in guild_list.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
                 let id = it.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
                 guild_arr_t.push(id.to_string());
@@ -105,7 +148,7 @@ impl KookOnebot {
         }
 
         for it in guild_arr_t {
-            let ret_json = self.http_get_json(&format!("/channel/list?guild_id={it}")).await?;
+            let ret_json = self.http_get_json(&format!("/channel/list?guild_id={it}"),false).await?;
             let channel_arr = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
             for it2 in channel_arr {
                 let id = it2.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
@@ -129,10 +172,10 @@ impl KookOnebot {
     }
 
     async fn get_group_member_list(&self,group_id:&str) -> Result<Vec<GroupMemberInfo>, Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut ret_vec:Vec<GroupMemberInfo> = vec![];
-        let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}")).await?;
+        let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}"),false).await?;
         let items = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
         for it in items {
             let role;
@@ -171,7 +214,7 @@ impl KookOnebot {
         let meta = ret_json.get("meta").ok_or("meta not found")?;
         let page_total = meta.get("page_total").ok_or("page_total not found")?.as_i64().ok_or("page_total not i32")?;
         for page in 1..page_total {
-            let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}&page={page}")).await?;
+            let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}&page={page}"),false).await?;
             for it in ret_json.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
                 let role;
                 let is_master = it.get("is_master").ok_or("get is_master err")?.as_bool().ok_or("is_master not bool")?;
@@ -212,7 +255,7 @@ impl KookOnebot {
 
     async fn get_channel_list(&self,guild_id:&str)-> Result<Vec<GroupInfo>, Box<dyn std::error::Error + Send + Sync>> {
         let mut ret_arr = vec![];
-        let ret_json = self.http_get_json(&format!("/channel/list?guild_id={guild_id}")).await?;
+        let ret_json = self.http_get_json(&format!("/channel/list?guild_id={guild_id}"),false).await?;
         let channel_arr = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
         for it2 in channel_arr {
             let id = it2.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
@@ -235,7 +278,7 @@ impl KookOnebot {
     }
 
     pub async fn get_login_info(&self)-> Result<LoginInfo, Box<dyn std::error::Error + Send + Sync>> {
-        let login_info = self.http_get_json("/user/me").await?;
+        let login_info = self.http_get_json("/user/me",false).await?;
         let user_id = login_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
         let nickname = login_info.get("username").ok_or("get username err")?.as_str().ok_or("username not str")?;
         Ok(LoginInfo {
@@ -299,8 +342,8 @@ impl KookOnebot {
     }
 
 
-    async fn get_stranger_info(&self,user_id:&str)-> Result<StrangerInfo, Box<dyn std::error::Error + Send + Sync>> {
-        let stranger_info = self.http_get_json(&format!("/user/view?user_id={user_id}")).await?;
+    async fn get_stranger_info(&self,user_id:&str,use_cache:bool)-> Result<StrangerInfo, Box<dyn std::error::Error + Send + Sync>> {
+        let stranger_info = self.http_get_json(&format!("/user/view?user_id={user_id}"),use_cache).await?;
         let user_id = stranger_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
         let nickname = stranger_info.get("username").ok_or("get username err")?.as_str().ok_or("username not str")?;
         Ok(StrangerInfo {
@@ -313,8 +356,8 @@ impl KookOnebot {
     }
 
     
-    async fn get_group_info(&self,group_id:&str)-> Result<GroupInfo, Box<dyn std::error::Error + Send + Sync>> {
-        let stranger_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
+    async fn get_group_info(&self,group_id:&str,use_cache:bool)-> Result<GroupInfo, Box<dyn std::error::Error + Send + Sync>> {
+        let stranger_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),use_cache).await?;
         let group_id = stranger_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
         let group_name = stranger_info.get("name").ok_or("get name err")?.as_str().ok_or("name not str")?;
         Ok(GroupInfo {
@@ -327,16 +370,16 @@ impl KookOnebot {
 
     #[allow(dead_code)]
     async fn get_msg(&self,msg_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _msg_info = self.http_get_json(&format!("/message/view?msg_id={msg_id}")).await?;
+        let _msg_info = self.http_get_json(&format!("/message/view?msg_id={msg_id}"),false).await?;
         Ok(())
     }
 
     
-    async fn get_group_member_info(&self,group_id:&str,user_id:&str)-> Result<GroupMemberInfo, Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
+    async fn get_group_member_info(&self,group_id:&str,user_id:&str,use_cache:bool)-> Result<GroupMemberInfo, Box<dyn std::error::Error + Send + Sync>> {
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),use_cache).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
-        let stranger_info = self.http_get_json(&format!("/user/view?user_id={user_id}&guild_id={guild_id}")).await?;
-        let guild_info = self.http_get_json(&format!("/guild/view?guild_id={guild_id}")).await?;
+        let stranger_info = self.http_get_json(&format!("/user/view?user_id={user_id}&guild_id={guild_id}"),use_cache).await?;
+        let guild_info = self.http_get_json(&format!("/guild/view?guild_id={guild_id}"),use_cache).await?;
         let owner_id = guild_info.get("user_id").ok_or("get user_id err")?.as_str().ok_or("user_id not str")?;
         let role;
         if owner_id == user_id {
@@ -371,7 +414,7 @@ impl KookOnebot {
 
     
     async fn set_group_kick(&self,group_id:&str,user_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["guild_id"] = guild_id.into();
@@ -388,7 +431,7 @@ impl KookOnebot {
     }
 
     async fn set_group_leave(&self,group_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["guild_id"] = guild_id.into();
@@ -399,7 +442,7 @@ impl KookOnebot {
     pub async fn get_friend_list(&self)-> Result<Vec<FriendInfo>, Box<dyn std::error::Error + Send + Sync>> {
 
         let mut ret_vec = vec![];
-        let friend_list = self.http_get_json(&format!("/user-chat/list")).await?;
+        let friend_list = self.http_get_json(&format!("/user-chat/list"),false).await?;
         for it in friend_list.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
             let target_info = it.get("target_info").ok_or("target_info not found")?;
             let id = target_info.get("id").ok_or("id not found")?.as_str().ok_or("id not str")?;
@@ -415,7 +458,7 @@ impl KookOnebot {
         let meta = friend_list.get("meta").ok_or("meta not found")?;
         let page_total = meta.get("page_total").ok_or("page_total not found")?.as_i64().ok_or("page_total not i32")?;
         for page in 1..page_total{
-            let friend_list = self.http_get_json(&format!("/user-chat/list?page={page}")).await?;
+            let friend_list = self.http_get_json(&format!("/user-chat/list?page={page}"),false).await?;
             for it in friend_list.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
                 let target_info = it.get("target_info").ok_or("target_info not found")?;
                 let id = target_info.get("id").ok_or("id not found")?.as_str().ok_or("id not str")?;
@@ -441,7 +484,7 @@ impl KookOnebot {
     }
 
     async fn set_group_card(&self,group_id:&str,user_id:&str,card:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}")).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["guild_id"] = guild_id.into();
@@ -481,7 +524,7 @@ impl KookOnebot {
 
 
     async fn get_gateway(&self)-> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let ret_json = self.http_get_json(&format!("/gateway/index?compress=1")).await?;
+        let ret_json = self.http_get_json(&format!("/gateway/index?compress=1"),false).await?;
         Ok(ret_json.get("url").ok_or("get url err")?.as_str().ok_or("url not str")?.to_owned())
     }
 
@@ -563,44 +606,6 @@ impl KookOnebot {
             }
         });
         Ok(js.to_string())
-    }
-
-
-    async fn get_group_sender_t(&self,group_id:u64,user_id: u64) -> Result<GroupMemberInfo, Box<dyn std::error::Error + Send + Sync>> {
-        lazy_static! {
-            static ref CACHE : std::sync::RwLock<VecDeque<(u64,u64,GroupMemberInfo,u64)>>  = std::sync::RwLock::new(VecDeque::from([]));
-        }
-        let tm = SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
-        {
-            let mut lk = CACHE.write().unwrap();
-            
-            loop {
-                let mut remove_index = 0;
-                for it in &*lk {
-                    if tm - it.3 > 60 {
-                        break;
-                    }
-                    remove_index += 1;
-                }
-                if remove_index == lk.len() {
-                    break;
-                }
-                lk.remove(remove_index);
-            }
-            
-            for it in &*lk {
-                if it.0 == group_id && it.1 == user_id{
-                    return Ok(it.2.clone());
-                }
-            }
-        }
-        
-        let info = self.get_group_member_info(&group_id.to_string(),&user_id.to_string()).await?;
-        {
-            let mut lk = CACHE.write().unwrap();
-            lk.push_back((group_id,user_id,info.clone(),tm));
-        }
-        Ok(info)
     }
 
     async fn deal_group_file_upload_event(&self,data:&serde_json::Value,user_id:u64) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
@@ -702,7 +707,7 @@ impl KookOnebot {
         let message = data.get("content").ok_or("content not found")?.as_str().ok_or("content not str")?.to_owned();
         let extra = data.get("extra").ok_or("extra not found")?;
         // 获取发送者
-        let sender: GroupMemberInfo = self.get_group_sender_t(group_id,user_id).await?;
+        let sender: GroupMemberInfo = self.get_group_member_info(&group_id.to_string(),&user_id.to_string(),true).await?;
 
         // 获取消息类型
         let msg_type = data.get("type").ok_or("type not found")?.as_i64().ok_or("type not i64")?;
@@ -1013,7 +1018,7 @@ impl KookOnebot {
                 if !is_group {
                     continue;
                 }
-                let qq = it.get("data").ok_or("data not found")?.get("qq").ok_or("qq not found")?.as_str().ok_or("qq not str")?;
+                let qq = to_json_str(it.get("data").ok_or("data not found")?.get("qq").ok_or("qq not found")?);
                 let at_str = &format!("(met){}(met)",qq);
                 if last_type == 1 && to_send_data.len() != 0 {
                     let l = to_send_data.len();
@@ -1026,7 +1031,7 @@ impl KookOnebot {
                 if quote !=  "" {
                     continue;
                 }
-                let cq_id = it.get("data").ok_or("data not found")?.get("id").ok_or("reply not found")?.as_str().ok_or("reply not str")?;
+                let cq_id = to_json_str(it.get("data").ok_or("data not found")?.get("id").ok_or("reply not found")?);
                 let kook_id = crate::msgid_tool::get_msg_id(cq_id.parse::<i32>()?);
                 quote = kook_id.raw_ids.get(0).unwrap_or(&String::new()).to_owned();
             }
@@ -1250,7 +1255,8 @@ impl KookOnebot {
 
     async fn deal_ob_get_stranger_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let user_id = get_json_str(params,"user_id");
-        let info = self.get_stranger_info(&user_id).await?;
+        let use_cache = !get_json_bool(params,"no_cache");
+        let info = self.get_stranger_info(&user_id,use_cache).await?;
         let send_json = serde_json::json!({
             "status":"ok",
             "retcode":0,
@@ -1262,7 +1268,8 @@ impl KookOnebot {
 
     async fn deal_ob_get_group_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
-        let info = self.get_group_info(&group_id).await?;
+        let use_cache = !get_json_bool(params,"no_cache");
+        let info = self.get_group_info(&group_id,use_cache).await?;
         let send_json = serde_json::json!({
             "status":"ok",
             "retcode":0,
@@ -1287,7 +1294,8 @@ impl KookOnebot {
     async fn deal_ob_get_group_member_info(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let group_id = get_json_str(params,"group_id");
         let user_id = get_json_str(params,"user_id");
-        let info = self.get_group_member_info(&group_id, &user_id).await?;
+        let use_cache = !get_json_bool(params,"no_cache");
+        let info = self.get_group_member_info(&group_id, &user_id,use_cache).await?;
         let send_json = serde_json::json!({
             "status":"ok",
             "retcode":0,
@@ -1477,7 +1485,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.11",
+                        "app_version":"0.0.12",
                         "protocol_version":"v11"
                     },
                     "echo":echo
@@ -1556,6 +1564,19 @@ fn get_json_str(js:&serde_json::Value,key:&str) -> String {
     }
     return "".to_owned();
 }
+
+fn get_json_bool(js:&serde_json::Value,key:&str) -> bool {
+    if let Some(j) = js.get(key) {
+        if j.is_boolean() {
+            return j.as_bool().unwrap();
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+}
+
 
 
 #[derive(Serialize, Deserialize, Debug)]

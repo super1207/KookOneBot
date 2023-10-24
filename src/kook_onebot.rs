@@ -1387,14 +1387,10 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    // 这个函数处理onebot的api调用
-    pub async fn deal_onebot(&self,_uid:&str,text:&str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let js:serde_json::Value = serde_json::from_str(&text)?;
+    async fn deal_onebot_sub(&self,_uid:&str,text:&str,js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let action = js.get("action").ok_or("action not found")?.as_str().ok_or("action not str")?;
         let def = serde_json::json!({});
-        let def_str = serde_json::json!("");
         let params = js.get("params").unwrap_or(&def);
-        let echo = js.get("echo").unwrap_or(&def_str);
         let send_json;
         log::info!("收到来自onebot的动作:{text}");
         send_json = match action {
@@ -1490,15 +1486,55 @@ impl KookOnebot {
             _ => {
                 serde_json::json!({
                     "status":"failed",
-                    "retcode":-1,
-                    "data": {},
+                    "retcode":1404,
                     "echo":echo
                 })
             }
         };
-        let json_str = send_json.to_string();
-        log::info!("ONEBOT动作返回:{}",json_str);
-        Ok(json_str)
+        Ok(send_json)
+    }
+    // 这个函数处理onebot的api调用
+    pub async fn deal_onebot(&self,_uid:&str,text:&str) -> (i64,String) {
+        let js_ret;
+        let http_code:i64;
+        let js_rst: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&text);
+        if let Ok(js) = js_rst {
+            let def_str = serde_json::json!("");
+            let echo = js.get("echo").unwrap_or(&def_str);
+            let rst = self.deal_onebot_sub(_uid,text,&js,echo).await;
+            match rst {
+                Ok(ret_json) => {
+                    let code = ret_json.get("retcode").unwrap().as_i64().unwrap();
+                    if code == 0 {
+                        http_code = 200;
+                    } else { // 1404 API NOT FOUND 
+                        http_code = 404;
+                        log::error!("ONEBOT动作调用出错:`API NOT FOUND`");
+                    }
+                    js_ret = ret_json;
+                },
+                Err(err) => {
+                    http_code = 200;
+                    js_ret = serde_json::json!({
+                        "status":"failed",
+                        "retcode":-1,
+                        "echo":echo
+                    });
+                    log::error!("ONEBOT动作调用出错:{err:?}");
+                },
+            }
+        } else {
+            // 如果 POST 请求的正文格式不正确，状态码为 400
+            http_code = 400;
+            js_ret = serde_json::json!({
+                "status":"failed",
+                "retcode":1400,
+            });
+            log::error!("ONEBOT动作调用出错:`INVALID JSON`");
+        }
+        let json_str = js_ret.to_string();
+        log::info!("ONEBOT动作返回:{json_str}");
+        return (http_code,json_str);
     }
 }
 

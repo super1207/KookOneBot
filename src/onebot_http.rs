@@ -53,10 +53,35 @@ pub async fn deal_onebot_http(mut request: hyper::Request<hyper::Body>) -> Resul
         if let Some(content_type) = headers_map.get("content-type") {
             if content_type.to_str()? == "application/json" {
                 let body = hyper::body::to_bytes(request.body_mut()).await?;
-                params  = serde_json::from_slice(&body)?;
-            } else {
+                match serde_json::from_slice(&body) {
+                    Ok(v) => {
+                        params = v;
+                    } ,
+                    Err(_) => {
+                        let ret = serde_json::json!({
+                            "status":"failed",
+                            "retcode":1400,
+                        });
+                        log::error!("ONEBOT动作调用出错:`INVALID JSON`");
+                        let mut res = hyper::Response::new(hyper::Body::from(ret.to_string()));
+                        (*res.status_mut()) = hyper::StatusCode::BAD_REQUEST;
+                        res.headers_mut().insert("Content-Type", hyper::http::HeaderValue::from_static("application/json"));
+                        return Ok(res);
+                    },
+                }
+            } else if content_type.to_str()? == "application/x-www-form-urlencoded" {
                 let body = hyper::body::to_bytes(request.body_mut()).await?;
                 params = url::form_urlencoded::parse(&body).collect::<serde_json::Value>();
+            } else {
+                let ret = serde_json::json!({
+                    "status":"failed",
+                    "retcode":1406,
+                });
+                log::error!("ONEBOT动作调用出错:`HTTP 406`");
+                let mut res = hyper::Response::new(hyper::Body::from(ret.to_string()));
+                (*res.status_mut()) = hyper::StatusCode::NOT_ACCEPTABLE;
+                res.headers_mut().insert("Content-Type", hyper::http::HeaderValue::from_static("application/json"));
+                return Ok(res);
             }
         } else {
             let body = hyper::body::to_bytes(request.body_mut()).await?;
@@ -70,8 +95,11 @@ pub async fn deal_onebot_http(mut request: hyper::Request<hyper::Body>) -> Resul
         "action":action,
         "params": params
     });
-    let ret = kb.deal_onebot("", &js.to_string()).await?;
+    let (http_code,ret) = kb.deal_onebot("", &js.to_string()).await;
     let mut res = hyper::Response::new(hyper::Body::from(ret));
+    if http_code == 404 {
+        (*res.status_mut()) = hyper::StatusCode::NOT_FOUND;
+    }
     res.headers_mut().insert("Content-Type", hyper::http::HeaderValue::from_static("application/json"));
     return Ok(res);
 }

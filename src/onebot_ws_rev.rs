@@ -105,13 +105,8 @@ async fn deal_ws2(url:&str,
         }
         let msg_text = msg.to_text()?;
         // 处理onebot的api调用
-        let ret = kb.deal_onebot(url,msg_text).await;
-        if ret.is_err() {
-            log::error!("ONEBOT_WS_REV动作调用出错:{ret:?}");
-        }else {
-            // 发回到onebot客户端
-            tx.send(ret.unwrap()).await?;
-        }
+        let (_,ret) = kb.deal_onebot(url,msg_text).await;
+        tx.send(ret).await?;
     }
     Ok(())
 }

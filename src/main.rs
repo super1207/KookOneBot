@@ -38,7 +38,7 @@ async fn connect_handle(request: hyper::Request<hyper::Body>) -> Result<hyper::R
     if is_pass == false {
         log::error!("WS或HTTP鉴权失败!");
         let mut res = hyper::Response::new(hyper::Body::from(vec![]));
-        *res.status_mut() = hyper::StatusCode::NOT_FOUND;
+        *res.status_mut() = hyper::StatusCode::FORBIDDEN;
         return Ok(res);
     }
     // 处理正向ws

@@ -90,7 +90,7 @@ impl KookOnebot {
         }
         // 从缓存中返回数据
         if use_cache {
-            let lk = CACHE.write().unwrap();
+            let lk = CACHE.read().unwrap();
             for it in &*lk {
                 if it.0 ==uri {
                     return Ok(it.1.clone());
@@ -172,7 +172,7 @@ impl KookOnebot {
     }
 
     async fn get_group_member_list(&self,group_id:&str) -> Result<Vec<GroupMemberInfo>, Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),true).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut ret_vec:Vec<GroupMemberInfo> = vec![];
         let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}"),false).await?;
@@ -278,7 +278,7 @@ impl KookOnebot {
     }
 
     pub async fn get_login_info(&self)-> Result<LoginInfo, Box<dyn std::error::Error + Send + Sync>> {
-        let login_info = self.http_get_json("/user/me",false).await?;
+        let login_info = self.http_get_json("/user/me",true).await?;
         let user_id = login_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
         let nickname = login_info.get("username").ok_or("get username err")?.as_str().ok_or("username not str")?;
         Ok(LoginInfo {
@@ -370,7 +370,7 @@ impl KookOnebot {
 
     #[allow(dead_code)]
     async fn get_msg(&self,msg_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let _msg_info = self.http_get_json(&format!("/message/view?msg_id={msg_id}"),false).await?;
+        let _msg_info = self.http_get_json(&format!("/message/view?msg_id={msg_id}"),true).await?;
         Ok(())
     }
 
@@ -414,7 +414,7 @@ impl KookOnebot {
 
     
     async fn set_group_kick(&self,group_id:&str,user_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),true).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["guild_id"] = guild_id.into();
@@ -431,7 +431,7 @@ impl KookOnebot {
     }
 
     async fn set_group_leave(&self,group_id:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),true).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["guild_id"] = guild_id.into();
@@ -484,7 +484,7 @@ impl KookOnebot {
     }
 
     async fn set_group_card(&self,group_id:&str,user_id:&str,card:&str)-> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),false).await?;
+        let group_info = self.http_get_json(&format!("/channel/view?target_id={group_id}"),true).await?;
         let guild_id = group_info.get("guild_id").ok_or("get guild_id err")?.as_str().ok_or("guild_id not str")?;
         let mut json:serde_json::Value = serde_json::from_str("{}")?;
         json["guild_id"] = guild_id.into();

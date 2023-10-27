@@ -4,7 +4,7 @@ use futures_util::{StreamExt, SinkExt};
 use hyper::http::{HeaderValue, HeaderName};
 use tokio::net::TcpStream;
 
-use crate::{G_REVERSE_URL, G_ONEBOT_RX, G_KOOK_TOKEN, G_SELF_ID, G_ACCESS_TOKEN};
+use crate::{G_REVERSE_URL, G_ONEBOT_RX, G_KOOK_TOKEN, G_SELF_ID, G_ACCESS_TOKEN, onebot_http::get_params_from_uri};
 
 
 // 反向ws
@@ -115,12 +115,22 @@ async fn deal_ws2(url:&str,
 async fn onebot_rev_ws(ws_url:String) {
     loop {
         let mut request = tungstenite::client::IntoClientRequest::into_client_request(ws_url.clone()).unwrap();
-        // 反向ws鉴权
-        let g_access_token = G_ACCESS_TOKEN.read().await.clone();
-        if g_access_token != "" {
-            request.headers_mut().insert("Authorization", HeaderValue::from_str(&format!("Bearer {}",g_access_token)).unwrap());
+       
+        // 配置文件
+        let mut access_token = G_ACCESS_TOKEN.read().await.clone();
+
+        // url
+        let mp: std::collections::HashMap<String, String> = get_params_from_uri(&hyper::Uri::from_str(&ws_url).unwrap());
+        if let Some(val) = mp.get("access_token") {
+            access_token = val.to_owned();
         }
-        let self_id = G_SELF_ID.read().await;
+
+        // 无论如何，都添加Authorization头
+        if access_token != "" {
+            request.headers_mut().insert("Authorization", HeaderValue::from_str(&format!("Bearer {}",access_token)).unwrap());
+        }
+
+        let self_id = G_SELF_ID.read().await.clone();
         request.headers_mut().append(HeaderName::from_str("X-Self-ID").unwrap(), HeaderValue::from_str(&self_id.to_string()).unwrap());
         request.headers_mut().append(HeaderName::from_str("X-Client-Role").unwrap(), HeaderValue::from_str("Universal").unwrap());
         let rst;

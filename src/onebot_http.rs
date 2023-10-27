@@ -111,6 +111,7 @@ pub async fn check_auth(request: &hyper::Request<hyper::Body>) -> Result<bool, B
     let g_access_token = G_ACCESS_TOKEN.read().await.clone();
     let headers_map = request.headers();
     if !g_access_token.is_empty() {
+        // 两个地方任何有一个满足要求，则通过
         {
             let access_token:String; 
             if let Some(token) = headers_map.get("Authorization") {

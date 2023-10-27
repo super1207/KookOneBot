@@ -7,7 +7,7 @@ use crate::{G_REVERSE_URL, kook_onebot::KookOnebot, G_SECERT};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 
-pub async fn post_to_client(url:&str,json_str:&str,self_id:u64) -> Result<(), Box<dyn std::error::Error + Send + Sync>>{
+pub async fn post_to_client(url:&str,json_str:&str,self_id:u64) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
     let secert = G_SECERT.read().await.clone();
     let uri = reqwest::Url::from_str(url)?;
     let client = reqwest::Client::builder().danger_accept_invalid_certs(true).no_proxy().build()?;
@@ -25,8 +25,16 @@ pub async fn post_to_client(url:&str,json_str:&str,self_id:u64) -> Result<(), Bo
     }
     req.headers_mut().append(HeaderName::from_str("Content-type")?, HeaderValue::from_str("application/json")?);
     req.headers_mut().append(HeaderName::from_str("X-Self-ID")?, HeaderValue::from_str(&self_id.to_string())?);
-    client.execute(req).await?;
-    Ok(())
+    let res= client.execute(req).await?;
+    let res_code = res.status();
+    let mut res_json = serde_json::Value::Null;
+    if res_code != reqwest::StatusCode::NO_CONTENT {
+        let res_content = res.bytes().await?;
+        if res_content.len() != 0 {
+            res_json = serde_json::from_slice(&res_content)?;
+        }
+    }
+    Ok(res_json)
 }
 
 

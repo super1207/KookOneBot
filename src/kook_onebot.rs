@@ -9,7 +9,7 @@ use regex::Regex;
 use serde_derive::{Serialize, Deserialize};
 use tokio_tungstenite::connect_async;
 use std::time::SystemTime;
-use crate::{G_ONEBOT_RX, cqtool::{str_msg_to_arr, arr_to_cq_str, make_kook_text, kook_msg_to_cq, to_json_str}, msgid_tool::QMessageStruct, G_REVERSE_URL};
+use crate::{G_ONEBOT_RX, cqtool::{str_msg_to_arr, arr_to_cq_str, make_kook_text, kook_msg_to_cq, to_json_str}, msgid_tool::QMessageStruct, G_REVERSE_URL, G_KOOK_TOKEN, G_SELF_ID};
 
 
 #[derive(Clone)]
@@ -20,7 +20,8 @@ pub struct KookOnebot {
 }
 
 impl KookOnebot {
-    async fn send_to_onebot_client(&self,json_str:&str) {
+    async fn send_to_onebot_client(&self,js:&serde_json::Value) {
+        let json_str = js.to_string();
         log::info!("发送ONEBOT事件:{json_str}");
         {
             let lk = G_ONEBOT_RX.read().await;
@@ -39,16 +40,115 @@ impl KookOnebot {
             let uri_t = uri.to_owned();
             let json_str_t = json_str.to_owned();
             let self_id_t = self.self_id;
+            let js_t = js.clone();
             tokio::spawn(async move{
-                let rst = crate::onebot_http_rev::post_to_client(&uri_t,&json_str_t,self_id_t).await;
-                if rst.is_err() {
-                    log::error!("发送事件到ONEBOT_HTTP客户端出错:`{}`",rst.err().unwrap());
+                match crate::onebot_http_rev::post_to_client(&uri_t,&json_str_t,self_id_t).await {
+                    Ok(res) => {
+                        if !res.is_null() { // 执行快速操作
+                            if let Err(err) = KookOnebot::fast_http_operator(&res,&js_t).await {
+                                log::error!("HTTP_POST快速操作出错:`{}`",err);
+                            }
+                        }
+                    },
+                    Err(err) => {
+                        log::error!("发送事件到ONEBOT_HTTP客户端出错:`{}`",err);
+                    }
                 }
             });
         }
         
     }
 
+    async fn fast_http_operator(res_js:&serde_json::Value,send_js:&serde_json::Value) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        log::info!("HTTP_POST快速操作:`{res_js}`");
+        let kb = crate::kook_onebot::KookOnebot {
+            token: G_KOOK_TOKEN.read().await.to_owned(),
+            self_id: G_SELF_ID.read().await.to_owned(),
+            sn: Arc::new(AtomicI64::new(0)),
+        };
+        
+        let message_type = get_json_str(send_js, "message_type");
+        if message_type == "group" {
+            let reply = get_json_str(res_js, "reply");
+            let auto_escape = get_json_bool(res_js, "auto_escape");
+            let at_sender = get_json_bool(res_js, "at_sender");
+            let delete = get_json_bool(res_js, "delete");
+            let kick = get_json_bool(res_js, "kick");
+            let ban = get_json_bool(res_js, "ban");
+            let group_id = send_js.get("group_id").ok_or("group_id not found")?.as_u64().ok_or("group_id not u64")?;
+            let user_id = send_js.get("user_id").ok_or("user_id not found")?.as_u64().ok_or("user_id not u64")?;
+            if reply != "" {
+                let message;
+                if at_sender {
+                    message = format!("[CQ:at,qq={user_id}]") + &reply;
+                }else {
+                    message = reply;
+                }
+                let to_send = serde_json::json!({
+                    "action":"send_group_msg",
+                    "params":{
+                        "group_id":group_id,
+                        "message":message,
+                        "auto_escape":auto_escape
+                    }
+               });
+                kb.deal_onebot(&to_send.to_string()).await;
+            }
+            if kick {
+                let to_send = serde_json::json!({
+                    "action":"set_group_kick",
+                    "params":{
+                        "group_id":group_id,
+                        "message":user_id
+                    }
+                });
+                kb.deal_onebot(&to_send.to_string()).await;
+            }
+            if delete {
+                let message_id = send_js.get("message_id").ok_or("message_id not found")?.as_i64().ok_or("message_id not u64")?;
+                let to_send = serde_json::json!({
+                    "action":"delete_msg",
+                    "params":{
+                        "message_id":message_id
+                    }
+                });
+                kb.deal_onebot(&to_send.to_string()).await;
+            }
+            if ban {
+                let ban_duration_str = get_json_str(res_js, "ban_duration");
+                let ban_duration:u64;
+                if ban_duration_str != "" {
+                    ban_duration = 60 * 30;
+                } else {
+                    ban_duration = ban_duration_str.parse::<u64>()?;
+                }
+                let to_send = serde_json::json!({
+                    "action":"set_group_ban",
+                    "params":{
+                        "group_id":group_id,
+                        "user_id":user_id,
+                        "duration":ban_duration
+                    }
+                });
+                kb.deal_onebot(&to_send.to_string()).await;
+            }
+        } else if message_type == "send_private_msg" {
+            let reply = get_json_str(res_js, "reply");
+            let auto_escape = get_json_bool(res_js, "auto_escape");
+            let user_id = send_js.get("user_id").ok_or("user_id not found")?.as_u64().ok_or("user_id not u64")?;
+            let to_send = serde_json::json!({
+                "action":"send_group_msg",
+                "params":{
+                    "message":reply,
+                    "user_id":user_id,
+                    "auto_escape":auto_escape
+                }
+           });
+           kb.deal_onebot(&to_send.to_string()).await;
+        }
+
+        Ok(())
+    }
 
     async fn http_get_json_t(&self,uri:&str) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         log::info!("发送KOOK_GET:{uri}");
@@ -663,7 +763,7 @@ impl KookOnebot {
                     "user_id":user_id,
                     "file":f
                 });
-                self.send_to_onebot_client(&event_json.to_string()).await;
+                self.send_to_onebot_client(&event_json).await;
                 return Ok(true);
             }
         }
@@ -762,7 +862,7 @@ impl KookOnebot {
             "font":0,
             "sender":sender
         });
-        self.send_to_onebot_client(&event_json.to_string()).await;
+        self.send_to_onebot_client(&event_json).await;
         Ok(())
     }
 
@@ -829,7 +929,7 @@ impl KookOnebot {
             "font":0,
             "sender":sender
         });
-        self.send_to_onebot_client(&event_json.to_string()).await;
+        self.send_to_onebot_client(&event_json).await;
         Ok(())
     }
 
@@ -854,7 +954,7 @@ impl KookOnebot {
                 "operator_id":user_id,
                 "user_id":user_id,
             });
-            self.send_to_onebot_client(&event_json.to_string()).await;
+            self.send_to_onebot_client(&event_json).await;
         }
         Ok(())
     }
@@ -881,7 +981,7 @@ impl KookOnebot {
             "operator_id":1,
             "message_id": cq_id
         });
-        self.send_to_onebot_client(&event_json.to_string()).await;
+        self.send_to_onebot_client(&event_json).await;
         Ok(())
     }
 
@@ -906,7 +1006,7 @@ impl KookOnebot {
             "user_id": user_id,
             "message_id": cq_id
         });
-        self.send_to_onebot_client(&event_json.to_string()).await;
+        self.send_to_onebot_client(&event_json).await;
         Ok(())
     }
 
@@ -933,7 +1033,7 @@ impl KookOnebot {
                 "operator_id":user_id,
                 "user_id":user_id,
             });
-            self.send_to_onebot_client(&event_json.to_string()).await;
+            self.send_to_onebot_client(&event_json).await;
         }
         Ok(())
     }
@@ -1395,7 +1495,7 @@ impl KookOnebot {
         Ok(send_json)
     }
 
-    async fn deal_onebot_sub(&self,_uid:&str,text:&str,js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+    async fn deal_onebot_sub(&self,text:&str,js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let action = js.get("action").ok_or("action not found")?.as_str().ok_or("action not str")?;
         let def = serde_json::json!({});
         let params = js.get("params").unwrap_or(&def);
@@ -1502,14 +1602,14 @@ impl KookOnebot {
         Ok(send_json)
     }
     // 这个函数处理onebot的api调用
-    pub async fn deal_onebot(&self,_uid:&str,text:&str) -> (i64,String) {
+    pub async fn deal_onebot(&self,text:&str) -> (i64,String) {
         let js_ret;
         let http_code:i64;
         let js_rst: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&text);
         if let Ok(js) = js_rst {
             let def_str = serde_json::json!("");
             let echo = js.get("echo").unwrap_or(&def_str);
-            let rst = self.deal_onebot_sub(_uid,text,&js,echo).await;
+            let rst = self.deal_onebot_sub(text,&js,echo).await;
             match rst {
                 Ok(ret_json) => {
                     let code = ret_json.get("retcode").unwrap().as_i64().unwrap();

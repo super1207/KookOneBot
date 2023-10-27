@@ -105,7 +105,7 @@ async fn deal_ws2(url:&str,
         }
         let msg_text = msg.to_text()?;
         // 处理onebot的api调用
-        let (_,ret) = kb.deal_onebot(url,msg_text).await;
+        let (_,ret) = kb.deal_onebot(msg_text).await;
         tx.send(ret).await?;
     }
     Ok(())

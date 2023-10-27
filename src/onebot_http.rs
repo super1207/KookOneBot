@@ -95,7 +95,7 @@ pub async fn deal_onebot_http(mut request: hyper::Request<hyper::Body>) -> Resul
         "action":action,
         "params": params
     });
-    let (http_code,ret) = kb.deal_onebot("", &js.to_string()).await;
+    let (http_code,ret) = kb.deal_onebot(&js.to_string()).await;
     let mut res = hyper::Response::new(hyper::Body::from(ret));
     if http_code == 404 {
         (*res.status_mut()) = hyper::StatusCode::NOT_FOUND;

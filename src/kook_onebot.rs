@@ -420,9 +420,13 @@ impl KookOnebot {
             file_bin = base64::Engine::decode(&base64::engine::GeneralPurpose::new(
                 &base64::alphabet::STANDARD,
                 base64::engine::general_purpose::PAD), b64_str)?;
-           
         }else {
-            let file_path = uri.get(8..).ok_or("can't get file_path")?;
+            let file_path;
+            if cfg!(target_os = "linux") {
+                file_path = uri.get(7..).ok_or("can't get file_path")?;
+            } else {
+                file_path = uri.get(8..).ok_or("can't get file_path")?;
+            }
             let path = Path::new(&file_path);
             file_bin = tokio::fs::read(path).await?;
         }

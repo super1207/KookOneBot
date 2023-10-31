@@ -422,10 +422,10 @@ impl KookOnebot {
                 base64::engine::general_purpose::PAD), b64_str)?;
         }else {
             let file_path;
-            if cfg!(target_os = "linux") {
-                file_path = uri.get(7..).ok_or("can't get file_path")?;
-            } else {
+            if cfg!(target_os = "windows") {
                 file_path = uri.get(8..).ok_or("can't get file_path")?;
+            } else {
+                file_path = uri.get(7..).ok_or("can't get file_path")?;
             }
             let path = Path::new(&file_path);
             file_bin = tokio::fs::read(path).await?;

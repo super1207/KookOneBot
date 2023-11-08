@@ -239,6 +239,13 @@ impl KookOnebot {
         // 查询分页数据
         let meta = ret_json.get("meta").ok_or("meta not found")?;
         let page_total = meta.get("page_total").ok_or("page_total not found")?.as_i64().ok_or("page_total not i32")?;
+        let total = meta.get("total").ok_or("total not found")?.as_i64().ok_or("total not i32")?;
+
+        // 太多guild，onebot无法处理这种情况
+        if total > 150 {
+            return  None.ok_or("too many guild(>150),can't use get_group_list".to_owned())?;
+        }
+
         for page in 1..page_total{
             let guild_list = self.http_get_json(&format!("/guild/list?page={page}"),false).await?;
             for it in guild_list.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
@@ -1499,6 +1506,22 @@ impl KookOnebot {
         Ok(send_json)
     }
 
+    async fn deal_ob_get_cookies(&self,params:&serde_json::Value,_js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let domain = get_json_str(params,"domain");
+        if domain == "token" {
+            let send_json = serde_json::json!({
+                "status":"ok",
+                "retcode":0,
+                "data": {
+                    "cookies":self.token
+                },
+                "echo":echo
+            });
+            return Ok(send_json);
+        }
+        return None.ok_or(format!("`{domain}` not support"))?;
+    }
+
     async fn deal_onebot_sub(&self,text:&str,js:&serde_json::Value,echo:&serde_json::Value) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
         let action = js.get("action").ok_or("action not found")?.as_str().ok_or("action not str")?;
         let def = serde_json::json!({});
@@ -1555,7 +1578,10 @@ impl KookOnebot {
             },
             "get_group_member_list" => {
                 self.deal_ob_get_group_member_list(&params,&js,&echo).await?
-            }
+            },
+            "get_cookies" => {
+                self.deal_ob_get_cookies(&params,&js,&echo).await?
+            },
             "can_send_image" => {
                 serde_json::json!({
                     "status":"ok",

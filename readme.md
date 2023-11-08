@@ -77,7 +77,7 @@ secret：反向http需要的HMAC签名，用来验证上报的数据确实来自
 
 #### get_group_list 获取群列表
 
-成员数和最大成员数暂时为0，待研究。
+成员数和最大成员数暂时为0，待研究。如果你拥有的频道数量大于150，则此api调用失败。
 
 #### get_group_member_info 获取群成员信息
 
@@ -121,6 +121,10 @@ secret：反向http需要的HMAC签名，用来验证上报的数据确实来自
 
 实际上获取在bot的私信列表上的人
 
+#### get_cookies 获取机器人的cookies
+
+`domain`传`token`,响应数据中的`cookies`为kook的token，你可以用这个api来实现一些其它非onebot标准的功能。
+
 
 ### 正在研究
 
@@ -159,11 +163,11 @@ get_record 获取语音(此api已经过时)
 
 set_group_special_title 设置群组专属头衔(kook没有这个)
 
-set_group_ban 群组单人禁言kook的权限机制不好实现这个）
+set_group_ban 群组单人禁言(kook的权限机制不好实现这个）
 
-set_group_whole_ban 群组全员禁言kook的权限机制不好实现这个）
+set_group_whole_ban 群组全员禁言(kook的权限机制不好实现这个）
 
-set_group_admin 群组设置管理员kook的权限机制不好实现这个）
+set_group_admin 群组设置管理员(kook的权限机制不好实现这个）
 
 set_group_add_request 处理加群邀请(kook的bot被邀请就会同意，不需要处理)
 

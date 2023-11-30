@@ -243,7 +243,8 @@ impl KookOnebot {
 
         // 太多guild，onebot无法处理这种情况
         if total > 150 {
-            return  None.ok_or("too many guild(>150),can't use get_group_list".to_owned())?;
+            log::warn!("too many guild(>150),can't use get_group_list,only partial data will return");
+            return Ok(ret_arr);
         }
 
         for page in 1..page_total{
@@ -308,7 +309,7 @@ impl KookOnebot {
                 area:"".to_owned(),
                 join_time:(it.get("joined_at").ok_or("get joined_at err")?.as_u64().ok_or("joined_at not u64")? / 1000) as i32,
                 last_sent_time:(it.get("active_time").ok_or("get active_time err")?.as_u64().ok_or("active_time not u64")? / 1000) as i32,
-                level:"".to_owned(),
+                level:"0".to_owned(),
                 role:role.to_owned(),
                 unfriendly:false,
                 title:"".to_owned(),
@@ -346,7 +347,7 @@ impl KookOnebot {
                     area:"".to_owned(),
                     join_time:(it.get("joined_at").ok_or("get joined_at err")?.as_u64().ok_or("joined_at not u64")? / 1000) as i32,
                     last_sent_time:(it.get("active_time").ok_or("get active_time err")?.as_u64().ok_or("active_time not u64")? / 1000) as i32,
-                    level:"".to_owned(),
+                    level:"0".to_owned(),
                     role:role.to_owned(),
                     unfriendly:false,
                     title:"".to_owned(),
@@ -513,7 +514,7 @@ impl KookOnebot {
             area:"".to_owned(),
             join_time:(stranger_info.get("joined_at").ok_or("get joined_at err")?.as_u64().ok_or("joined_at not u64")? / 1000) as i32,
             last_sent_time:(stranger_info.get("active_time").ok_or("get active_time err")?.as_u64().ok_or("active_time not u64")? / 1000) as i32,
-            level:"".to_owned(),
+            level:"0".to_owned(),
             role:role.to_owned(),
             unfriendly:false,
             title:"".to_owned(),

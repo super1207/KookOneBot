@@ -8,6 +8,8 @@
 
 [红色问答](https://github.com/super1207/redreply)、[MiraiCQ](https://github.com/super1207/MiraiCQ) 与此项目配合更佳，欢迎加入为它们创建的QQ群：920220179、556515826
 
+### 如果你想在[Mirai & MrXiaoM/Overflow](https://github.com/MrXiaoM/Overflow)中体验kookonebot，暂时请使用[github actions](https://github.com/super1207/KookOneBot/actions)中的版本。
+
 
 ## 配置文件
 

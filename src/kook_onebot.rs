@@ -389,9 +389,11 @@ impl KookOnebot {
         let login_info = self.http_get_json("/user/me",true).await?;
         let user_id = login_info.get("id").ok_or("get id err")?.as_str().ok_or("id not str")?;
         let nickname = login_info.get("username").ok_or("get username err")?.as_str().ok_or("username not str")?;
+        let avatar = login_info.get("avatar").ok_or("get avatar err")?.as_str().ok_or("avatar not str")?;
         Ok(LoginInfo {
             user_id:user_id.parse::<u64>()?,
-            nickname:nickname.to_owned()
+            nickname:nickname.to_owned(),
+            avatar:avatar.to_owned()
         })
     }
 
@@ -1722,7 +1724,8 @@ struct GroupInfo {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoginInfo {
     pub user_id:u64,
-    pub nickname:String
+    pub nickname:String,
+    avatar:String
 }
 
 

@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     )).with_max_level(tracing::Level::INFO)
     .init();
 
-    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.12");
+    log::warn!("欢迎使用KookOnebot by super1207!!! v0.0.13");
 
     log::warn!("开源地址:https://github.com/super1207/KookOneBot");
 

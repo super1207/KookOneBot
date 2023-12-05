@@ -266,7 +266,20 @@ fn reformat_dates(before: &str) -> String {
             r"\(met\)(?P<qq>(\d+)|(all))\(met\)"
             ).unwrap();
     }
-    AT_REGEX.replace_all(before, "[CQ:at,qq=$qq]").to_string()
+    let after = AT_REGEX.replace_all(before, "[CQ:at,qq=$qq]").to_string();
+    let mut ret = String::new();
+    let mut is_f = false;
+    for ch in after.chars() {
+        if is_f {
+            is_f = false;
+            ret.push(ch);
+        }else if ch == '\\' {
+            is_f = true
+        }else {
+            ret.push(ch);
+        }
+    }
+    ret
 }
 
 pub fn kook_msg_to_cq(msg_type:i64,message:&str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {

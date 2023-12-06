@@ -1092,7 +1092,10 @@ impl KookOnebot {
                 self.deal_private_recall(data).await?;
             }
         } else {
-            self.deal_private_message_event(data,user_id).await?;
+            let self_id = self.self_id;
+            if user_id != self_id {
+                self.deal_private_message_event(data,user_id).await?;
+            }
         }
         Ok(())
     }

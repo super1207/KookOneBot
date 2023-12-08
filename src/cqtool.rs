@@ -261,23 +261,37 @@ pub fn make_kook_text(text:&str) -> String {
 }
 
 fn reformat_dates(before: &str) -> String {
-    lazy_static! {
-        static ref AT_REGEX : Regex = Regex::new(
-            r"\(met\)(?P<qq>(\d+)|(all))\(met\)"
-            ).unwrap();
-    }
-    let after = AT_REGEX.replace_all(before, "[CQ:at,qq=$qq]").to_string();
-    let mut ret = String::new();
-    let mut is_f = false;
-    for ch in after.chars() {
-        if is_f {
-            is_f = false;
-            ret.push(ch);
-        }else if ch == '\\' {
-            is_f = true
-        }else {
-            ret.push(ch);
+
+    fn kook_msg_f(msg: &str) -> String {
+        let mut ret = String::new();
+        let mut is_f = false;
+        for ch in msg.chars() {
+            if is_f {
+                is_f = false;
+                ret.push(ch);
+            }else if ch == '\\' {
+                is_f = true
+            }else {
+                ret.push(ch);
+            }
         }
+        return ret;
+    }
+        
+    let mut ret = String::new();
+    let sp = before.split("(met)");
+    let mut index = 0;
+    for it in sp{
+        if index % 2 == 0 {
+            ret.push_str(&cq_text_encode(&kook_msg_f(it)));
+        } else {
+            if it == "all" {
+                ret.push_str("[CQ:at,qq=all]");
+            }else{
+                ret.push_str(&format!("[CQ:at,qq={}]", it));
+            }
+        }
+        index += 1;
     }
     ret
 }

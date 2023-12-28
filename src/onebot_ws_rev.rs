@@ -127,12 +127,13 @@ async fn onebot_rev_ws(ws_url:String) {
 
         // 无论如何，都添加Authorization头
         if access_token != "" {
-            request.headers_mut().insert("Authorization", HeaderValue::from_str(&format!("Bearer {}",access_token)).unwrap());
+            request.headers_mut().insert("Authorization", HeaderValue::from_str(&format!("Token {}",access_token)).unwrap());
         }
 
         let self_id = G_SELF_ID.read().await.clone();
         request.headers_mut().append(HeaderName::from_str("X-Self-ID").unwrap(), HeaderValue::from_str(&self_id.to_string()).unwrap());
         request.headers_mut().append(HeaderName::from_str("X-Client-Role").unwrap(), HeaderValue::from_str("Universal").unwrap());
+        request.headers_mut().append(HeaderName::from_str("user-agent").unwrap(), HeaderValue::from_str("CQHttp/4.15.0").unwrap());
         let rst;
         if ws_url.starts_with("wss://") {
             let port_opt  = request.uri().port();

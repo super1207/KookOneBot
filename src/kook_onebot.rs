@@ -264,7 +264,7 @@ impl KookOnebot {
                 let group_name = it2.get("name").ok_or("get name err")?.as_str().ok_or("name not str")?;
 
                 let tp = it2.get("type").ok_or("get type err")?.as_i64().ok_or("type not i64")?;
-                let is_category = it2.get("is_category").ok_or("get is_category err")?.as_bool().ok_or("is_category not bool")?;
+                let is_category = get_json_bool(it2, "is_category");
 
                 if !is_category && tp == 1 {
                     ret_arr.push(GroupInfo {
@@ -287,7 +287,7 @@ impl KookOnebot {
         let items = ret_json.get("items").ok_or("get items err")?.as_array().ok_or("items not arr")?;
         for it in items {
             let role;
-            let is_master = it.get("is_master").ok_or("get is_master err")?.as_bool().ok_or("is_master not bool")?;
+            let is_master = get_json_bool(it, "is_master");
             if is_master {
                 role = "owner";
             }else{
@@ -325,7 +325,7 @@ impl KookOnebot {
             let ret_json = self.http_get_json(&format!("/guild/user-list?guild_id={guild_id}&page={page}"),false).await?;
             for it in ret_json.get("items").ok_or("items not found")?.as_array().ok_or("items not arr")? {
                 let role;
-                let is_master = it.get("is_master").ok_or("get is_master err")?.as_bool().ok_or("is_master not bool")?;
+                let is_master = get_json_bool(it, "is_master");
                 if is_master {
                     role = "owner";
                 }else{
@@ -371,7 +371,7 @@ impl KookOnebot {
             let group_name = it2.get("name").ok_or("get name err")?.as_str().ok_or("name not str")?;
 
             let tp = it2.get("type").ok_or("get type err")?.as_i64().ok_or("type not i64")?;
-            let is_category = it2.get("is_category").ok_or("get is_category err")?.as_bool().ok_or("is_category not bool")?;
+            let is_category = get_json_bool(it2, "is_category");
 
             if !is_category && tp == 1 {
                 ret_arr.push(GroupInfo {
@@ -1270,13 +1270,7 @@ impl KookOnebot {
     }
 
     fn get_auto_escape_from_params(&self,params:&serde_json::Value) -> bool {
-        let mut is_auto_escape = false;
-        let auto_escape_opt = params.get("auto_escape");
-        if auto_escape_opt.is_some() {
-            if auto_escape_opt.unwrap().is_boolean() {
-                is_auto_escape = auto_escape_opt.unwrap().as_bool().unwrap();
-            }
-        }
+        let is_auto_escape = get_json_bool(params, "auto_escape");
         return is_auto_escape;
     }
 
@@ -1621,7 +1615,7 @@ impl KookOnebot {
                     "retcode":0,
                     "data": {
                         "app_name":"kook-onebot",
-                        "app_version":"0.0.14",
+                        "app_version":"0.1.0",
                         "protocol_version":"v11"
                     },
                     "echo":echo
@@ -1705,7 +1699,14 @@ fn get_json_bool(js:&serde_json::Value,key:&str) -> bool {
     if let Some(j) = js.get(key) {
         if j.is_boolean() {
             return j.as_bool().unwrap();
-        } else {
+        } else if j.is_string(){
+            if j.as_str().unwrap() == "true" {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        else {
             return false;
         }
     } else {

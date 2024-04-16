@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use regex::Regex;
-
 
 fn cq_text_encode(data:&str) -> String {
     let mut ret_str:String = String::new();
